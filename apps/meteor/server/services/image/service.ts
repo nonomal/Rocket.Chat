@@ -1,15 +1,12 @@
-import stream, { Readable } from 'stream';
+import type { Readable } from 'stream';
+import stream from 'stream';
 
-import fileType from 'file-type';
-import sharp from 'sharp';
+import { ServiceClassInternal } from '@rocket.chat/core-services';
+import type { IMediaService, ResizeResult } from '@rocket.chat/core-services';
+import ExifTransformer from 'exif-be-gone';
+import ft from 'file-type';
 import isSvg from 'is-svg';
-
-import { ServiceClassInternal } from '../../sdk/types/ServiceClass';
-import { IMediaService, ResizeResult } from '../../sdk/types/IMediaService';
-
-/* eslint-disable  @typescript-eslint/no-var-requires */
-const ExifTransformer = require('exif-be-gone');
-/* eslint-enable  @typescript-eslint/no-var-requires */
+import sharp from 'sharp';
 
 export class MediaService extends ServiceClassInternal implements IMediaService {
 	protected name = 'media';
@@ -81,8 +78,8 @@ export class MediaService extends ServiceClassInternal implements IMediaService 
 		};
 	}
 
-	isImage(buff: Buffer): boolean {
-		const data = fileType(buff);
+	async isImage(buff: Buffer): Promise<boolean> {
+		const data = await ft.fromBuffer(buff);
 		if (!data?.ext) {
 			return false || this.isSvgImage(buff);
 		}
@@ -90,7 +87,7 @@ export class MediaService extends ServiceClassInternal implements IMediaService 
 	}
 
 	isSvgImage(buff: Buffer): boolean {
-		return isSvg(buff);
+		return isSvg(buff.toString('utf-8'));
 	}
 
 	stripExifFromBuffer(buffer: Buffer): Promise<Buffer> {

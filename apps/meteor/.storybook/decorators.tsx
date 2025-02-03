@@ -1,13 +1,14 @@
-import { DecoratorFunction } from '@storybook/addons';
-import React, { ReactElement } from 'react';
+import { mockAppRoot } from '@rocket.chat/mock-providers';
+import type { Decorator } from '@storybook/react';
 
 import ModalContextMock from '../client/stories/contexts/ModalContextMock';
-import QueryClientProviderMock from '../client/stories/contexts/QueryClientProviderMock';
 import RouterContextMock from '../client/stories/contexts/RouterContextMock';
 import ServerContextMock from '../client/stories/contexts/ServerContextMock';
 import TranslationContextMock from '../client/stories/contexts/TranslationContextMock';
 
-export const rocketChatDecorator: DecoratorFunction<ReactElement<unknown>> = (fn, { parameters }) => {
+const MockedAppRoot = mockAppRoot().build();
+
+export const rocketChatDecorator: Decorator = (fn, { parameters }) => {
 	const linkElement = document.getElementById('theme-styles') || document.createElement('link');
 	if (linkElement.id !== 'theme-styles') {
 		require('../app/theme/client/main.css');
@@ -24,7 +25,7 @@ export const rocketChatDecorator: DecoratorFunction<ReactElement<unknown>> = (fn
 	const { default: icons } = require('!!raw-loader!../private/public/icons.svg');
 
 	return (
-		<QueryClientProviderMock>
+		<MockedAppRoot>
 			<ServerContextMock {...parameters.serverContext}>
 				<TranslationContextMock {...parameters.translationContext}>
 					<ModalContextMock {...parameters.modalContext}>
@@ -40,6 +41,6 @@ export const rocketChatDecorator: DecoratorFunction<ReactElement<unknown>> = (fn
 					</ModalContextMock>
 				</TranslationContextMock>
 			</ServerContextMock>
-		</QueryClientProviderMock>
+		</MockedAppRoot>
 	);
 };

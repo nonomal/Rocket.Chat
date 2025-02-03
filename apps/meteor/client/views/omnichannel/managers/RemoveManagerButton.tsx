@@ -1,24 +1,24 @@
-import { Table, Icon, Button } from '@rocket.chat/fuselage';
-import { useMutableCallback } from '@rocket.chat/fuselage-hooks';
-import { useSetModal, useToastMessageDispatch, useTranslation } from '@rocket.chat/ui-contexts';
-import React, { ReactElement } from 'react';
+import { IconButton } from '@rocket.chat/fuselage';
+import { useEffectEvent } from '@rocket.chat/fuselage-hooks';
+import { useSetModal, useToastMessageDispatch } from '@rocket.chat/ui-contexts';
+import type { MouseEvent, ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import GenericModal from '../../../components/GenericModal';
+import { GenericTableCell } from '../../../components/GenericTable';
 import { useEndpointAction } from '../../../hooks/useEndpointAction';
 
 const RemoveManagerButton = ({ _id, reload }: { _id: string; reload: () => void }): ReactElement => {
-	const t = useTranslation();
-	const deleteAction = useEndpointAction('DELETE', `livechat/users/manager/${_id}`);
+	const { t } = useTranslation();
+	const deleteAction = useEndpointAction('DELETE', '/v1/livechat/users/manager/:_id', { keys: { _id } });
 	const setModal = useSetModal();
 	const dispatchToastMessage = useToastMessageDispatch();
 
-	const handleRemoveClick = useMutableCallback(async () => {
-		const result = await deleteAction();
-		if (result?.success === true) {
-			reload();
-		}
+	const handleRemoveClick = useEffectEvent(async () => {
+		await deleteAction();
+		reload();
 	});
-	const handleDelete = useMutableCallback((e) => {
+	const handleDelete = useEffectEvent((e: MouseEvent) => {
 		e.stopPropagation();
 		const onDeleteManager = async (): Promise<void> => {
 			try {
@@ -42,11 +42,9 @@ const RemoveManagerButton = ({ _id, reload }: { _id: string; reload: () => void 
 	});
 
 	return (
-		<Table.Cell fontScale='p2' color='hint' withTruncatedText>
-			<Button small ghost title={t('Remove')} onClick={handleDelete}>
-				<Icon name='trash' size='x16' />
-			</Button>
-		</Table.Cell>
+		<GenericTableCell fontScale='p2' color='hint' withTruncatedText>
+			<IconButton small icon='trash' title={t('Remove')} onClick={handleDelete} />
+		</GenericTableCell>
 	);
 };
 

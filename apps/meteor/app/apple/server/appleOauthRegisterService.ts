@@ -1,23 +1,11 @@
 import { KJUR } from 'jsrsasign';
 import { ServiceConfiguration } from 'meteor/service-configuration';
 
-import { settings, settingsRegistry } from '../../settings/server';
-import { config } from '../lib/config';
 import { AppleCustomOAuth } from './AppleCustomOAuth';
+import { settings } from '../../settings/server';
+import { config } from '../lib/config';
 
-export const AppleOAuth = new AppleCustomOAuth('apple', config);
-
-settingsRegistry.addGroup('OAuth', function () {
-	this.section('Apple', function () {
-		this.add('Accounts_OAuth_Apple', false, { type: 'boolean', public: true });
-
-		this.add('Accounts_OAuth_Apple_id', '', { type: 'string', public: true });
-		this.add('Accounts_OAuth_Apple_secretKey', '', { type: 'string', multiline: true });
-
-		this.add('Accounts_OAuth_Apple_iss', '', { type: 'string' });
-		this.add('Accounts_OAuth_Apple_kid', '', { type: 'string' });
-	});
-});
+new AppleCustomOAuth('apple', config);
 
 settings.watchMultiple(
 	[
@@ -27,11 +15,27 @@ settings.watchMultiple(
 		'Accounts_OAuth_Apple_iss',
 		'Accounts_OAuth_Apple_kid',
 	],
-	([enabled, clientId, serverSecret, iss, kid]) => {
+	async ([enabled, clientId, serverSecret, iss, kid]) => {
 		if (!enabled) {
-			return ServiceConfiguration.configurations.remove({
+			return ServiceConfiguration.configurations.removeAsync({
 				service: 'apple',
 			});
+		}
+
+		// if everything is empty but Apple login is enabled, don't show the login button
+		if (!clientId && !serverSecret && !iss && !kid) {
+			await ServiceConfiguration.configurations.upsertAsync(
+				{
+					service: 'apple',
+				},
+				{
+					$set: {
+						showButton: false,
+						enabled: settings.get('Accounts_OAuth_Apple'),
+					},
+				},
+			);
+			return;
 		}
 
 		const HEADER = {
@@ -56,7 +60,7 @@ settings.watchMultiple(
 			serverSecret as string,
 		);
 
-		ServiceConfiguration.configurations.upsert(
+		await ServiceConfiguration.configurations.upsertAsync(
 			{
 				service: 'apple',
 			},
@@ -66,8 +70,7 @@ settings.watchMultiple(
 					secret,
 					enabled: settings.get('Accounts_OAuth_Apple'),
 					loginStyle: 'popup',
-					clientId,
-					buttonLabelText: 'Sign in with Apple',
+					clientId: clientId as string,
 					buttonColor: '#000',
 					buttonLabelColor: '#FFF',
 				},

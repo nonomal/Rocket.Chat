@@ -1,18 +1,19 @@
+import type { ISetting, ISettingGroup, Optional, SettingValue } from '@rocket.chat/core-typings';
+import { isSettingEnterprise } from '@rocket.chat/core-typings';
 import { Emitter } from '@rocket.chat/emitter';
+import type { ISettingsModel } from '@rocket.chat/model-typings';
 import { isEqual } from 'underscore';
-import { ISetting, ISettingGroup, isSettingEnterprise, SettingValue } from '@rocket.chat/core-typings';
 
-import type SettingsModel from '../../models/server/models/Settings';
-import { SystemLogger } from '../../../server/lib/logger/system';
-import { overwriteSetting } from './functions/overwriteSetting';
-import { overrideSetting } from './functions/overrideSetting';
-import { getSettingDefaults } from './functions/getSettingDefaults';
-import { validateSetting } from './functions/validateSetting';
 import type { ICachedSettings } from './CachedSettings';
+import { getSettingDefaults } from './functions/getSettingDefaults';
+import { overrideSetting } from './functions/overrideSetting';
+import { overwriteSetting } from './functions/overwriteSetting';
+import { validateSetting } from './functions/validateSetting';
+import { SystemLogger } from '../../../server/lib/logger/system';
 
-export const blockedSettings = new Set<string>();
-export const hiddenSettings = new Set<string>();
-export const wizardRequiredSettings = new Set<string>();
+const blockedSettings = new Set<string>();
+const hiddenSettings = new Set<string>();
+const wizardRequiredSettings = new Set<string>();
 
 if (process.env.SETTINGS_BLOCKED) {
 	process.env.SETTINGS_BLOCKED.split(',').forEach((settingId) => blockedSettings.add(settingId.trim()));
@@ -50,18 +51,18 @@ const getGroupDefaults = (_id: string, options: ISettingAddGroupOptions = {}): I
 	...(options.displayQuery && { displayQuery: JSON.stringify(options.displayQuery) }),
 });
 
-export type ISettingAddGroupOptions = Partial<ISettingGroup>;
+type ISettingAddGroupOptions = Partial<ISettingGroup>;
 
 type addSectionCallback = (this: {
-	add(id: string, value: SettingValue, options: ISettingAddOptions): void;
-	with(options: ISettingAddOptions, cb: addSectionCallback): void;
-}) => void;
+	add(id: string, value: SettingValue, options: ISettingAddOptions): Promise<void>;
+	with(options: ISettingAddOptions, cb: addSectionCallback): Promise<void>;
+}) => Promise<void>;
 
 type addGroupCallback = (this: {
-	add(id: string, value: SettingValue, options: ISettingAddOptions): void;
-	section(section: string, cb: addSectionCallback): void;
-	with(options: ISettingAddOptions, cb: addGroupCallback): void;
-}) => void;
+	add(id: string, value: SettingValue, options: ISettingAddOptions): Promise<void>;
+	section(section: string, cb: addSectionCallback): Promise<void>;
+	with(options: ISettingAddOptions, cb: addGroupCallback): Promise<void>;
+}) => Promise<void>;
 
 type ISettingAddOptions = Partial<ISetting>;
 
@@ -72,7 +73,7 @@ const compareSettingsIgnoringKeys =
 			.filter((key) => !keys.includes(key as keyof ISetting))
 			.every((key) => isEqual(a[key as keyof ISetting], b[key as keyof ISetting]));
 
-const compareSettings = compareSettingsIgnoringKeys([
+export const compareSettings = compareSettingsIgnoringKeys([
 	'value',
 	'ts',
 	'createdAt',
@@ -83,13 +84,13 @@ const compareSettings = compareSettingsIgnoringKeys([
 ]);
 
 export class SettingsRegistry {
-	private model: typeof SettingsModel;
+	private model: ISettingsModel;
 
 	private store: ICachedSettings;
 
 	private _sorter: { [key: string]: number } = {};
 
-	constructor({ store, model }: { store: ICachedSettings; model: typeof SettingsModel }) {
+	constructor({ store, model }: { store: ICachedSettings; model: ISettingsModel }) {
 		this.store = store;
 		this.model = model;
 	}
@@ -97,7 +98,7 @@ export class SettingsRegistry {
 	/*
 	 * Add a setting
 	 */
-	add(_id: string, value: SettingValue, { sorter, section, group, ...options }: ISettingAddOptions = {}): void {
+	async add(_id: string, value: SettingValue, { sorter, section, group, ...options }: ISettingAddOptions = {}): Promise<void> {
 		if (!_id || value == null) {
 			throw new Error('Invalid arguments');
 		}
@@ -135,8 +136,11 @@ export class SettingsRegistry {
 			throw new Error(`Enterprise setting ${_id} is missing the invalidValue option`);
 		}
 
+		const settingFromCodeOverwritten = overwriteSetting(settingFromCode);
+
 		const settingStored = this.store.getSetting(_id);
-		const settingOverwritten = overwriteSetting(settingFromCode);
+
+		const settingStoredOverwritten = settingStored && overwriteSetting(settingStored);
 
 		try {
 			validateSetting(settingFromCode._id, settingFromCode.type, settingFromCode.value);
@@ -144,31 +148,39 @@ export class SettingsRegistry {
 			IS_DEVELOPMENT && SystemLogger.error(`Invalid setting code ${_id}: ${(e as Error).message}`);
 		}
 
-		const isOverwritten = settingFromCode !== settingOverwritten;
+		const isOverwritten = settingFromCode !== settingFromCodeOverwritten || (settingStored && settingStored !== settingStoredOverwritten);
 
-		const { _id: _, ...settingProps } = settingOverwritten;
+		const { _id: _, ...settingProps } = settingFromCodeOverwritten;
 
-		if (settingStored && !compareSettings(settingStored, settingOverwritten)) {
-			const { value: _value, ...settingOverwrittenProps } = settingOverwritten;
+		if (settingStored && !compareSettings(settingStored, settingFromCodeOverwritten)) {
+			const { value: _value, ...settingOverwrittenProps } = settingFromCodeOverwritten;
 
-			const overwrittenKeys = Object.keys(settingOverwritten);
+			const overwrittenKeys = Object.keys(settingFromCodeOverwritten);
 			const removedKeys = Object.keys(settingStored).filter((key) => !['_updatedAt'].includes(key) && !overwrittenKeys.includes(key));
 
-			this.model.upsert(
-				{ _id },
-				{
-					$set: { ...settingOverwrittenProps },
-					...(removedKeys.length && {
-						$unset: removedKeys.reduce((unset, key) => ({ ...unset, [key]: 1 }), {}),
-					}),
-				},
-			);
+			const updatedProps = (() => {
+				return {
+					...settingOverwrittenProps,
+					...(settingStoredOverwritten &&
+						settingStored.value !== settingStoredOverwritten.value && { value: settingStoredOverwritten.value }),
+				};
+			})();
+
+			await this.saveUpdatedSetting(_id, updatedProps, removedKeys);
+			if ('value' in updatedProps) {
+				this.store.set(updatedProps as ISetting);
+			}
+
 			return;
 		}
 
 		if (settingStored && isOverwritten) {
-			if (settingStored.value !== settingOverwritten.value) {
-				this.model.upsert({ _id }, settingProps);
+			if (settingStored.value !== settingFromCodeOverwritten.value) {
+				const overwrittenKeys = Object.keys(settingFromCodeOverwritten);
+				const removedKeys = Object.keys(settingStored).filter((key) => !['_updatedAt'].includes(key) && !overwrittenKeys.includes(key));
+
+				await this.saveUpdatedSetting(_id, settingProps, removedKeys);
+				this.store.set(settingFromCodeOverwritten);
 			}
 			return;
 		}
@@ -184,9 +196,9 @@ export class SettingsRegistry {
 
 		const settingOverwrittenDefault = overrideSetting(settingFromCode);
 
-		const setting = isOverwritten ? settingOverwritten : settingOverwrittenDefault;
+		const setting = isOverwritten ? settingFromCodeOverwritten : settingOverwrittenDefault;
 
-		this.model.insert(setting); // no need to emit unless we remove the oplog
+		await this.model.insertOne(setting); // no need to emit unless we remove the oplog
 
 		this.store.set(setting);
 	}
@@ -194,10 +206,10 @@ export class SettingsRegistry {
 	/*
 	 * Add a setting group
 	 */
-	addGroup(_id: string, cb: addGroupCallback): void;
+	async addGroup(_id: string, cb?: addGroupCallback): Promise<void>;
 
 	// eslint-disable-next-line no-dupe-class-members
-	addGroup(_id: string, groupOptions: ISettingAddGroupOptions | addGroupCallback = {}, cb?: addGroupCallback): void {
+	async addGroup(_id: string, groupOptions: ISettingAddGroupOptions | addGroupCallback = {}, cb?: addGroupCallback): Promise<void> {
 		if (!_id || (groupOptions instanceof Function && cb)) {
 			throw new Error('Invalid arguments');
 		}
@@ -211,7 +223,7 @@ export class SettingsRegistry {
 
 		if (!this.store.has(_id)) {
 			options.ts = new Date();
-			this.model.insert(options);
+			await this.model.insertOne(options as ISetting);
 			this.store.set(options as ISetting);
 		}
 
@@ -221,24 +233,24 @@ export class SettingsRegistry {
 
 		const addWith =
 			(preset: ISettingAddOptions) =>
-			(id: string, value: SettingValue, options: ISettingAddOptions = {}): void => {
+			(id: string, value: SettingValue, options: ISettingAddOptions = {}): Promise<void> => {
 				const mergedOptions = { ...preset, ...options };
-				this.add(id, value, mergedOptions);
+				return this.add(id, value, mergedOptions);
 			};
 		const sectionSetWith =
 			(preset: ISettingAddOptions) =>
-			(options: ISettingAddOptions, cb: addSectionCallback): void => {
+			(options: ISettingAddOptions, cb: addSectionCallback): Promise<void> => {
 				const mergedOptions = { ...preset, ...options };
-				cb.call({
+				return cb.call({
 					add: addWith(mergedOptions),
 					with: sectionSetWith(mergedOptions),
 				});
 			};
 		const sectionWith =
 			(preset: ISettingAddOptions) =>
-			(section: string, cb: addSectionCallback): void => {
+			(section: string, cb: addSectionCallback): Promise<void> => {
 				const mergedOptions = { ...preset, section };
-				cb.call({
+				return cb.call({
 					add: addWith(mergedOptions),
 					with: sectionSetWith(mergedOptions),
 				});
@@ -246,10 +258,10 @@ export class SettingsRegistry {
 
 		const groupSetWith =
 			(preset: ISettingAddOptions) =>
-			(options: ISettingAddOptions, cb: addGroupCallback): void => {
+			(options: ISettingAddOptions, cb: addGroupCallback): Promise<void> => {
 				const mergedOptions = { ...preset, ...options };
 
-				cb.call({
+				return cb.call({
 					add: addWith(mergedOptions),
 					section: sectionWith(mergedOptions),
 					with: groupSetWith(mergedOptions),
@@ -257,5 +269,22 @@ export class SettingsRegistry {
 			};
 
 		return groupSetWith({ group: _id })({}, callback);
+	}
+
+	private async saveUpdatedSetting(
+		_id: string,
+		settingProps: Omit<Optional<ISetting, 'value'>, '_id'>,
+		removedKeys?: string[],
+	): Promise<void> {
+		await this.model.updateOne(
+			{ _id },
+			{
+				$set: settingProps,
+				...(removedKeys?.length && {
+					$unset: removedKeys.reduce((unset, key) => ({ ...unset, [key]: 1 }), {}),
+				}),
+			},
+			{ upsert: true },
+		);
 	}
 }

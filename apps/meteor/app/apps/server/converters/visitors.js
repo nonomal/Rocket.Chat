@@ -1,24 +1,26 @@
-import LivechatVisitors from '../../../models/server/models/LivechatVisitors';
-import { transformMappedData } from '../../lib/misc/transformMappedData';
+import { LivechatVisitors } from '@rocket.chat/models';
 
+import { transformMappedData } from './transformMappedData';
+
+// TODO: check if functions from this converter can be async
 export class AppVisitorsConverter {
 	constructor(orch) {
 		this.orch = orch;
 	}
 
-	convertById(id) {
-		const visitor = LivechatVisitors.findOneById(id);
+	async convertById(id) {
+		const visitor = await LivechatVisitors.findOneEnabledById(id);
 
 		return this.convertVisitor(visitor);
 	}
 
-	convertByToken(token) {
-		const visitor = LivechatVisitors.getVisitorByToken(token);
+	async convertByToken(token) {
+		const visitor = await LivechatVisitors.getVisitorByToken(token);
 
 		return this.convertVisitor(visitor);
 	}
 
-	convertVisitor(visitor) {
+	async convertVisitor(visitor) {
 		if (!visitor) {
 			return undefined;
 		}

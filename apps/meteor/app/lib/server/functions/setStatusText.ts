@@ -1,20 +1,22 @@
+import { api } from '@rocket.chat/core-services';
+import type { IUser } from '@rocket.chat/core-typings';
+import type { Updater } from '@rocket.chat/models';
+import { Users } from '@rocket.chat/models';
 import { Meteor } from 'meteor/meteor';
-import s from 'underscore.string';
 
-import { Users } from '../../../models/server';
-import { Users as UsersRaw } from '../../../models/server/raw';
-import { hasPermission } from '../../../authorization/server';
+import { hasPermissionAsync } from '../../../authorization/server/functions/hasPermission';
 import { RateLimiter } from '../lib';
-import { api } from '../../../../server/sdk/api';
 
-export const _setStatusTextPromise = async function (userId: string, statusText: string): Promise<boolean> {
+async function _setStatusText(userId: string, statusText: string, updater?: Updater<IUser>): Promise<boolean> {
 	if (!userId) {
 		return false;
 	}
 
-	statusText = s.trim(statusText).substr(0, 120);
+	statusText = statusText.trim().substr(0, 120);
 
-	const user = await UsersRaw.findOneById(userId);
+	const user = await Users.findOneById<Pick<IUser, '_id' | 'username' | 'name' | 'status' | 'roles' | 'statusText'>>(userId, {
+		projection: { username: 1, name: 1, status: 1, roles: 1, statusText: 1 },
+	});
 
 	if (!user) {
 		return false;
@@ -24,49 +26,25 @@ export const _setStatusTextPromise = async function (userId: string, statusText:
 		return true;
 	}
 
-	await UsersRaw.updateStatusText(user._id, statusText);
+	if (updater) {
+		updater.set('statusText', statusText);
+	} else {
+		await Users.updateStatusText(user._id, statusText);
+	}
 
-	const { _id, username, status } = user;
-	api.broadcast('presence.status', {
-		user: { _id, username, status, statusText },
+	const { _id, username, status, name, roles } = user;
+	void api.broadcast('presence.status', {
+		user: { _id, username, status, statusText, name, roles },
+		previousStatus: status,
 	});
 
 	return true;
-};
-
-export const _setStatusText = function (userId: any, statusText: string): unknown {
-	statusText = s.trim(statusText);
-	if (statusText.length > 120) {
-		statusText = statusText.substr(0, 120);
-	}
-
-	if (!userId) {
-		return false;
-	}
-
-	const user = Users.findOneById(userId);
-
-	// User already has desired statusText, return
-	if (user.statusText === statusText) {
-		return user;
-	}
-
-	// Set new statusText
-	Users.updateStatusText(user._id, statusText);
-	user.statusText = statusText;
-
-	const { _id, username, status } = user;
-	api.broadcast('presence.status', {
-		user: { _id, username, status, statusText },
-	});
-
-	return true;
-};
+}
 
 export const setStatusText = RateLimiter.limitFunction(_setStatusText, 5, 60000, {
-	0() {
+	async 0() {
 		// Administrators have permission to change others status, so don't limit those
 		const userId = Meteor.userId();
-		return !userId || !hasPermission(userId, 'edit-other-user-info');
+		return !userId || !(await hasPermissionAsync(userId, 'edit-other-user-info'));
 	},
 });

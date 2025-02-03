@@ -1,10 +1,9 @@
-import { useContext, useMemo } from 'react';
-import { useSubscription } from 'use-subscription';
+import { useContext, useMemo, useSyncExternalStore } from 'react';
 
 import { SessionContext } from '../SessionContext';
 
 export const useSession = (name: string): unknown => {
 	const { query } = useContext(SessionContext);
-	const subscription = useMemo(() => query(name), [query, name]);
-	return useSubscription(subscription);
+	const [subscribe, getSnapshot] = useMemo(() => query(name), [query, name]);
+	return useSyncExternalStore(subscribe, getSnapshot);
 };

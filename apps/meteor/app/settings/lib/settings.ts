@@ -1,9 +1,11 @@
+import type { SettingValue } from '@rocket.chat/core-typings';
 import { Meteor } from 'meteor/meteor';
 import _ from 'underscore';
-import { SettingValue } from '@rocket.chat/core-typings';
 
-export type SettingComposedValue<T extends SettingValue = SettingValue> = { key: string; value: T };
-export type SettingCallback = (key: string, value: SettingValue, initialLoad?: boolean) => void;
+import { sdk } from '../../utils/client/lib/SDKClient';
+
+type SettingComposedValue<T extends SettingValue = SettingValue> = { key: string; value: T };
+type SettingCallback = (key: string, value: SettingValue, initialLoad?: boolean) => void;
 
 interface ISettingRegexCallbacks {
 	regex: RegExp;
@@ -16,9 +18,10 @@ export class SettingsBase {
 	private regexCallbacks = new Map<string, ISettingRegexCallbacks>();
 
 	// private ts = new Date()
-	public get<T extends SettingValue = SettingValue>(_id: RegExp, callback: SettingCallback): void;
 
-	public get<T extends SettingValue = SettingValue>(_id: string, callback: SettingCallback): void;
+	public get(_id: RegExp, callback: SettingCallback): void;
+
+	public get(_id: string, callback: SettingCallback): void;
 
 	public get<T extends SettingValue = SettingValue>(_id: RegExp): SettingComposedValue<T>[];
 
@@ -75,15 +78,21 @@ export class SettingsBase {
 			}, []);
 		}
 
-		return Meteor.settings && Meteor.settings[_id];
+		return Meteor.settings?.[_id];
 	}
 
-	set(_id: string, value: SettingValue, callback: () => void): void {
-		Meteor.call('saveSetting', _id, value, callback);
+	set(_id: string, value: SettingValue, callback: (err?: unknown, result?: any) => void): void {
+		sdk
+			.call('saveSetting', _id, value)
+			.then((result) => callback(undefined, result))
+			.catch(callback);
 	}
 
-	batchSet(settings: Array<{ _id: string; value: SettingValue }>, callback: () => void): void {
-		Meteor.call('saveSettings', settings, callback);
+	batchSet(settings: Array<{ _id: string; value: SettingValue }>, callback: (err?: unknown, result?: any) => void): void {
+		sdk
+			.call('saveSettings', settings)
+			.then((result) => callback(undefined, result))
+			.catch(callback);
 	}
 
 	load(key: string, value: SettingValue, initialLoad: boolean): void {

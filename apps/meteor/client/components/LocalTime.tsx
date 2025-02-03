@@ -1,5 +1,6 @@
-import { useTranslation } from '@rocket.chat/ui-contexts';
-import React, { memo, ReactElement } from 'react';
+import type { ReactElement } from 'react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useUTCClock } from '../hooks/useUTCClock';
 
@@ -9,7 +10,7 @@ type LocalTimeProps = {
 
 const LocalTime = ({ utcOffset }: LocalTimeProps): ReactElement => {
 	const time = useUTCClock(utcOffset);
-	const t = useTranslation();
+	const { t } = useTranslation();
 
 	return <>{t('Local_Time_time', { time })}</>;
 };

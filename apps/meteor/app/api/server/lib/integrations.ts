@@ -1,6 +1,6 @@
 import type { IIntegration, IUser } from '@rocket.chat/core-typings';
+import { Integrations } from '@rocket.chat/models';
 
-import { Integrations } from '../../../models/server/raw';
 import { hasPermissionAsync } from '../../../authorization/server/functions/hasPermission';
 
 const hasIntegrationsPermission = async (userId: string, integration: IIntegration): Promise<boolean> => {
@@ -10,7 +10,7 @@ const hasIntegrationsPermission = async (userId: string, integration: IIntegrati
 		return true;
 	}
 
-	if (userId === integration._createdBy._id) {
+	if (userId === integration._createdBy?._id) {
 		return hasPermissionAsync(userId, `manage-own-${type}-integrations`);
 	}
 
@@ -24,7 +24,7 @@ export const findOneIntegration = async ({
 }: {
 	userId: string;
 	integrationId: string;
-	createdBy: IUser;
+	createdBy?: IUser['_id'];
 }): Promise<IIntegration> => {
 	const integration = await Integrations.findOneByIdAndCreatedByIfExists({
 		_id: integrationId,

@@ -1,47 +1,32 @@
 import type { IOAuthApps, IUser } from '@rocket.chat/core-typings';
-import Ajv from 'ajv';
 
-const ajv = new Ajv();
-
-export type OauthAppsGetParams = { clientId: string } | { appId: string };
+import type { DeleteOAuthAppParams } from './oauthapps/DeleteOAuthAppParamsDELETE';
+import type { OauthAppsAddParams } from './oauthapps/OAuthAppsAddParamsPOST';
+import type { OauthAppsGetParams } from './oauthapps/OAuthAppsGetParamsGET';
+import type { UpdateOAuthAppParams } from './oauthapps/UpdateOAuthAppParamsPOST';
 
 export type OAuthAppsEndpoint = {
-	'oauth-apps.list': {
+	'/v1/oauth-apps.list': {
 		GET: (params: { uid: IUser['_id'] }) => {
 			oauthApps: IOAuthApps[];
 		};
 	};
 
-	'oauth-apps.get': {
+	'/v1/oauth-apps.get': {
 		GET: (params: OauthAppsGetParams) => {
 			oauthApp: IOAuthApps;
 		};
 	};
-};
 
-const oauthAppsGetParamsSchema = {
-	oneOf: [
-		{
-			type: 'object',
-			properties: {
-				clientId: {
-					type: 'string',
-				},
-			},
-			required: ['clientId'],
-			additionalProperties: false,
-		},
-		{
-			type: 'object',
-			properties: {
-				appId: {
-					type: 'string',
-				},
-			},
-			required: ['appId'],
-			additionalProperties: false,
-		},
-	],
-};
+	'/v1/oauth-apps.create': {
+		POST: (params: OauthAppsAddParams) => { application: IOAuthApps };
+	};
 
-export const isOauthAppsGetParams = ajv.compile<OauthAppsGetParams>(oauthAppsGetParamsSchema);
+	'/v1/oauth-apps.update': {
+		POST: (params: UpdateOAuthAppParams) => IOAuthApps | null;
+	};
+
+	'/v1/oauth-apps.delete': {
+		POST: (params: DeleteOAuthAppParams) => boolean;
+	};
+};

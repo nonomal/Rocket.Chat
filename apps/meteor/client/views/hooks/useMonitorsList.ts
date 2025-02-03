@@ -21,29 +21,27 @@ export const useMonitorsList = (
 	const [itemsList, setItemsList] = useState(() => new RecordList<ILivechatMonitorRecord>());
 	const reload = useCallback(() => setItemsList(new RecordList<ILivechatMonitorRecord>()), []);
 
-	const endpoint = 'livechat/monitors.list';
-
-	const getMonitors = useEndpoint('GET', endpoint);
+	const getMonitors = useEndpoint('GET', '/v1/livechat/monitors');
 
 	useComponentDidUpdate(() => {
 		options && reload();
 	}, [options, reload]);
 
 	const fetchData = useCallback(
-		async (start, end) => {
+		async (start: number, end: number) => {
 			const { monitors, total } = await getMonitors({
 				text: options.filter,
 				offset: start,
 				count: end + start,
+				sort: JSON.stringify({ username: 1 }),
 			});
 
 			return {
-				items: monitors.map((members: any) => {
-					members._updatedAt = new Date(members._updatedAt);
-					members.label = members.username;
-					members.value = { value: members._id, label: members.username };
-					return members;
-				}),
+				items: monitors.map((members: any) => ({
+					...members,
+					label: members.username,
+					value: members._id,
+				})),
 				itemCount: total,
 			};
 		},

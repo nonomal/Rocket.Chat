@@ -1,8 +1,8 @@
+import { Logger } from '@rocket.chat/logger';
 import { performance } from 'universal-perf-hooks';
 
+import { metrics, StatsTracker } from '../../app/metrics/server';
 import { callbacks } from '../../lib/callbacks';
-import { Logger } from '../lib/logger/Logger';
-import { metrics, StatsTracker } from '../../app/metrics';
 
 callbacks.setLogger(new Logger('Callbacks'));
 
@@ -22,7 +22,6 @@ callbacks.setMetricsTrackers({
 	trackHook: ({ hook, length }) => {
 		return metrics.rocketchatHooks.startTimer({
 			hook,
-			// eslint-disable-next-line @typescript-eslint/camelcase
 			callbacks_length: length,
 		});
 	},

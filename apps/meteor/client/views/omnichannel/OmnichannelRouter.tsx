@@ -1,28 +1,42 @@
-import { useCurrentRoute, useRoute } from '@rocket.chat/ui-contexts';
-import React, { ReactNode, Suspense, useEffect, FC } from 'react';
+import { useRouter } from '@rocket.chat/ui-contexts';
+import type { ReactNode, ReactElement } from 'react';
+import { Suspense, useEffect } from 'react';
 
-import { SideNav } from '../../../app/ui-utils/client';
+import OmnichannelSidebar from './sidebar/OmnichannelSidebar';
 import PageSkeleton from '../../components/PageSkeleton';
+import SidebarPortal from '../../sidebar/SidebarPortal';
 
 type OmnichannelRouterProps = {
-	renderRoute?: () => ReactNode;
+	children?: ReactNode;
 };
 
-const OmnichannelRouter: FC<OmnichannelRouterProps> = ({ renderRoute }) => {
-	const [routeName] = useCurrentRoute();
-	const defaultRoute = useRoute('omnichannel-current-chats');
-	useEffect(() => {
-		if (routeName === 'omnichannel-index') {
-			defaultRoute.push();
-		}
-	}, [defaultRoute, routeName]);
+const OmnichannelRouter = ({ children }: OmnichannelRouterProps): ReactElement => {
+	const router = useRouter();
 
-	useEffect(() => {
-		SideNav.setFlex('omnichannelFlex');
-		SideNav.openFlex(() => undefined);
-	}, []);
+	useEffect(
+		() =>
+			router.subscribeToRouteChange(() => {
+				if (router.getRouteName() !== 'omnichannel-index') {
+					return;
+				}
 
-	return renderRoute ? <Suspense fallback={<PageSkeleton />}>{renderRoute()}</Suspense> : <PageSkeleton />;
+				router.navigate({ name: 'omnichannel-current-chats' }, { replace: true });
+			}),
+		[router],
+	);
+
+	if (!children) {
+		return <PageSkeleton />;
+	}
+
+	return (
+		<>
+			<Suspense fallback={<PageSkeleton />}>{children}</Suspense>
+			<SidebarPortal>
+				<OmnichannelSidebar />
+			</SidebarPortal>
+		</>
+	);
 };
 
 export default OmnichannelRouter;

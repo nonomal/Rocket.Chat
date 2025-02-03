@@ -1,14 +1,17 @@
-import { IRole, IPermission } from '@rocket.chat/core-typings';
-import { TableRow, TableCell } from '@rocket.chat/fuselage';
-import { useMutableCallback } from '@rocket.chat/fuselage-hooks';
-import { useTranslation, TranslationKey } from '@rocket.chat/ui-contexts';
-import React, { useState, memo, ReactElement } from 'react';
+import type { IRole, IPermission } from '@rocket.chat/core-typings';
+import { useEffectEvent } from '@rocket.chat/fuselage-hooks';
+import type { TranslationKey } from '@rocket.chat/ui-contexts';
+import type { TFunction } from 'i18next';
+import type { ReactElement } from 'react';
+import { useState, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { CONSTANTS } from '../../../../../app/authorization/lib';
-import { useChangeRole } from '../hooks/useChangeRole';
 import RoleCell from './RoleCell';
+import { CONSTANTS } from '../../../../../app/authorization/lib';
+import { GenericTableRow, GenericTableCell } from '../../../../components/GenericTable';
+import { useChangeRole } from '../hooks/useChangeRole';
 
-const getName = (t: ReturnType<typeof useTranslation>, permission: IPermission): string => {
+const getName = (t: TFunction, permission: IPermission): string => {
 	if (permission.level === CONSTANTS.SETTINGS_LEVEL) {
 		let path = '';
 		if (permission.group) {
@@ -31,19 +34,19 @@ type PermissionRowProps = {
 };
 
 const PermissionRow = ({ permission, roleList, onGrant, onRemove }: PermissionRowProps): ReactElement => {
-	const t = useTranslation();
+	const { t } = useTranslation();
 	const { _id, roles } = permission;
 	const [hovered, setHovered] = useState(false);
 	const changeRole = useChangeRole({ onGrant, onRemove, permissionId: _id });
 
-	const onMouseEnter = useMutableCallback(() => setHovered(true));
-	const onMouseLeave = useMutableCallback(() => setHovered(false));
+	const onMouseEnter = useEffectEvent(() => setHovered(true));
+	const onMouseLeave = useEffectEvent(() => setHovered(false));
 
 	return (
-		<TableRow key={_id} role='link' action tabIndex={0} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
-			<TableCell maxWidth='x300' withTruncatedText title={t(`${_id}_description` as TranslationKey)}>
+		<GenericTableRow key={_id} role='link' action tabIndex={0} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+			<GenericTableCell maxWidth='x300' withTruncatedText title={t(`${_id}_description` as TranslationKey)}>
 				{getName(t, permission)}
-			</TableCell>
+			</GenericTableCell>
 			{roleList.map(({ _id, name, description }) => (
 				<RoleCell
 					key={_id}
@@ -56,7 +59,7 @@ const PermissionRow = ({ permission, roleList, onGrant, onRemove }: PermissionRo
 					permissionId={_id}
 				/>
 			))}
-		</TableRow>
+		</GenericTableRow>
 	);
 };
 

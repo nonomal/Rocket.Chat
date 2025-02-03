@@ -1,16 +1,21 @@
-import { SettingsContext, SettingsContextValue, useAtLeastOnePermission, useMethod } from '@rocket.chat/ui-contexts';
+import type { ISetting } from '@rocket.chat/core-typings';
+import type { SettingsContextValue } from '@rocket.chat/ui-contexts';
+import { SettingsContext, useAtLeastOnePermission, useMethod } from '@rocket.chat/ui-contexts';
+import { useQueryClient } from '@tanstack/react-query';
 import { Tracker } from 'meteor/tracker';
-import React, { useCallback, useEffect, useMemo, useState, FunctionComponent } from 'react';
+import type { ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { createReactiveSubscriptionFactory } from '../lib/createReactiveSubscriptionFactory';
 import { PrivateSettingsCachedCollection } from '../lib/settings/PrivateSettingsCachedCollection';
 import { PublicSettingsCachedCollection } from '../lib/settings/PublicSettingsCachedCollection';
-import { createReactiveSubscriptionFactory } from './createReactiveSubscriptionFactory';
 
 type SettingsProviderProps = {
-	readonly privileged?: boolean;
+	children?: ReactNode;
+	privileged?: boolean;
 };
 
-const SettingsProvider: FunctionComponent<SettingsProviderProps> = ({ children, privileged = false }) => {
+const SettingsProvider = ({ children, privileged = false }: SettingsProviderProps) => {
 	const hasPrivilegedPermission = useAtLeastOnePermission(
 		useMemo(() => ['view-privileged-setting', 'edit-privileged-setting', 'manage-selected-settings'], []),
 	);
@@ -18,7 +23,7 @@ const SettingsProvider: FunctionComponent<SettingsProviderProps> = ({ children, 
 	const hasPrivateAccess = privileged && hasPrivilegedPermission;
 
 	const cachedCollection = useMemo(
-		() => (hasPrivateAccess ? PrivateSettingsCachedCollection.get() : PublicSettingsCachedCollection.get()),
+		() => (hasPrivateAccess ? PrivateSettingsCachedCollection : PublicSettingsCachedCollection),
 		[hasPrivateAccess],
 	);
 
@@ -47,7 +52,11 @@ const SettingsProvider: FunctionComponent<SettingsProviderProps> = ({ children, 
 	}, [cachedCollection]);
 
 	const querySetting = useMemo(
-		() => createReactiveSubscriptionFactory((_id) => ({ ...cachedCollection.collection.findOne(_id) })),
+		() =>
+			createReactiveSubscriptionFactory((_id): ISetting | undefined => {
+				const subscription = cachedCollection.collection.findOne(_id);
+				return subscription ? { ...subscription } : undefined;
+			}),
 		[cachedCollection],
 	);
 
@@ -64,8 +73,8 @@ const SettingsProvider: FunctionComponent<SettingsProviderProps> = ({ children, 
 								(query.section
 									? { section: query.section }
 									: {
-											$or: [{ section: { $exists: false } }, { section: null }],
-									  })),
+											$or: [{ section: { $exists: false } }, { section: undefined }],
+										})),
 						},
 						{
 							sort: {
@@ -80,12 +89,21 @@ const SettingsProvider: FunctionComponent<SettingsProviderProps> = ({ children, 
 		[cachedCollection],
 	);
 
+	const queryClient = useQueryClient();
+
 	const saveSettings = useMethod('saveSettings');
 	const dispatch = useCallback(
-		async (changes) => {
-			await saveSettings(changes);
+		async (changes: Partial<ISetting>[]) => {
+			// FIXME: This is a temporary solution to invalidate queries when settings change
+			changes.forEach((val) => {
+				if (val._id === 'Enterprise_License') {
+					queryClient.invalidateQueries({ queryKey: ['licenses'] });
+				}
+			});
+
+			await saveSettings(changes as Pick<ISetting, '_id' | 'value'>[]);
 		},
-		[saveSettings],
+		[queryClient, saveSettings],
 	);
 
 	const contextValue = useMemo<SettingsContextValue>(
@@ -103,3 +121,6 @@ const SettingsProvider: FunctionComponent<SettingsProviderProps> = ({ children, 
 };
 
 export default SettingsProvider;
+
+// '[subscribe: (onStoreChange: () => void) => () => void, getSnapshot: () => {}]'
+// '[subscribe: (onStoreChange: () => void) => () => void, getSnapshot: () => ISetting | undefined]'

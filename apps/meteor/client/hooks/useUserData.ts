@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { useSubscription } from 'use-subscription';
+import { useContext, useMemo, useSyncExternalStore } from 'react';
 
-import { UserPresence, Presence } from '../lib/presence';
+import { UserPresenceContext } from '../contexts/UserPresenceContext';
+import type { UserPresence } from '../lib/presence';
 
 /**
  * Hook to fetch and subscribe users data
@@ -11,18 +11,12 @@ import { UserPresence, Presence } from '../lib/presence';
  * @public
  */
 export const useUserData = (uid: string): UserPresence | undefined => {
-	const subscription = useMemo(
-		() => ({
-			getCurrentValue: (): UserPresence | undefined => Presence.store.get(uid),
-			subscribe: (callback: any): any => {
-				Presence.listen(uid, callback);
-				return (): void => {
-					Presence.stop(uid, callback);
-				};
-			},
-		}),
-		[uid],
+	const userPresence = useContext(UserPresenceContext);
+
+	const { subscribe, get } = useMemo(
+		() => userPresence?.queryUserData(uid) ?? { subscribe: () => () => undefined, get: () => undefined },
+		[userPresence, uid],
 	);
 
-	return useSubscription(subscription);
+	return useSyncExternalStore(subscribe, get);
 };

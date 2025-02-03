@@ -1,8 +1,8 @@
 import { usePermission } from '@rocket.chat/ui-contexts';
-import React, { ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
-import NotAuthorizedPage from '../../notAuthorized/NotAuthorizedPage';
 import OAuthAppsPage from './OAuthAppsPage';
+import NotAuthorizedPage from '../../notAuthorized/NotAuthorizedPage';
 
 const OAuthAppsRoute = (): ReactElement => {
 	const canAccessOAuthApps = usePermission('manage-oauth-apps');

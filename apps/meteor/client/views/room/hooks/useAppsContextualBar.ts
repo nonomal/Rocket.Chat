@@ -1,56 +1,34 @@
-import { IUIKitContextualBarInteraction } from '@rocket.chat/apps-engine/definition/uikit';
-import { useCurrentRoute } from '@rocket.chat/ui-contexts';
-import { useEffect, useState } from 'react';
+import { useRouteParameter } from '@rocket.chat/ui-contexts';
+import { useCallback, useSyncExternalStore } from 'react';
 
-import { Apps } from '../../../../app/apps/client/orchestrator';
-import { getUserInteractionPayloadByViewId } from '../../../../app/ui-message/client/ActionManager';
-import { App } from '../../admin/apps/types';
-import { useRoom } from '../contexts/RoomContext';
+import { useUiKitActionManager } from '../../../uikit/hooks/useUiKitActionManager';
 
-type AppsContextualBarData = {
-	viewId: string;
-	roomId: string;
-	payload: IUIKitContextualBarInteraction;
-	appInfo: App;
-};
+export const useAppsContextualBar = () => {
+	const viewId = useRouteParameter('context');
+	const actionManager = useUiKitActionManager();
 
-export const useAppsContextualBar = (): AppsContextualBarData | undefined => {
-	const [, params] = useCurrentRoute();
-	const [payload, setPayload] = useState<IUIKitContextualBarInteraction>();
-	const [appInfo, setAppInfo] = useState<App>();
-
-	const { _id: roomId } = useRoom();
-
-	const viewId = params?.context;
-
-	useEffect(() => {
-		async function getAppData(appId: string): Promise<void> {
-			const app = await Apps.getApp(appId);
-			setAppInfo(app);
+	const getSnapshot = useCallback(() => {
+		if (!viewId) {
+			return undefined;
 		}
 
-		if (viewId) {
-			setPayload(getUserInteractionPayloadByViewId(viewId) as IUIKitContextualBarInteraction);
-		}
+		return actionManager.getInteractionPayloadByViewId(viewId)?.view;
+	}, [actionManager, viewId]);
 
-		if (payload?.appId) {
-			getAppData(payload.appId);
-		}
+	const subscribe = useCallback(
+		(handler: () => void) => {
+			if (!viewId) {
+				return () => undefined;
+			}
 
-		return (): void => {
-			setPayload(undefined);
-			setAppInfo(undefined);
-		};
-	}, [viewId, payload?.appId]);
+			actionManager.on(viewId, handler);
 
-	if (viewId && payload && appInfo) {
-		return {
-			viewId,
-			roomId,
-			payload,
-			appInfo,
-		};
-	}
+			return () => actionManager.off(viewId, handler);
+		},
+		[actionManager, viewId],
+	);
 
-	return undefined;
+	const view = useSyncExternalStore(subscribe, getSnapshot);
+
+	return view;
 };

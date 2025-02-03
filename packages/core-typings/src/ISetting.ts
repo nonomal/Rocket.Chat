@@ -1,28 +1,34 @@
-import type { FilterQuery } from 'mongodb';
-
-export type SettingId = string;
-export type GroupId = SettingId;
-export type TabId = SettingId;
-export type SectionName = string;
+import type { IRocketChatAssetConstraint } from './IRocketChatAssets';
+import type { IRocketChatRecord } from './IRocketChatRecord';
 
 export enum SettingEditor {
 	COLOR = 'color',
 	EXPRESSION = 'expression',
 }
-type AssetValue = { defaultUrl?: string };
+
 export type SettingValueMultiSelect = (string | number)[];
-export type SettingValueRoomPick = Array<{ _id: string; name: string }> | string;
-export type SettingValue = string | boolean | number | SettingValueMultiSelect | Date | AssetValue | undefined;
+export type SettingValueRoomPick = { _id: string; name?: string }[];
+export type SettingValue =
+	| string
+	| boolean
+	| number
+	| SettingValueMultiSelect
+	| SettingValueRoomPick
+	| Date
+	| { url?: string; defaultUrl?: string }
+	| undefined
+	| null;
 
 export interface ISettingSelectOption {
 	key: string | number;
 	i18nLabel: string;
 }
 
-export type ISetting = ISettingBase | ISettingEnterprise | ISettingColor | ISettingCode | ISettingAction;
+export type ISetting = ISettingBase | ISettingEnterprise | ISettingColor | ISettingCode | ISettingAction | ISettingAsset;
 
-export interface ISettingBase {
-	_id: SettingId;
+type EnableQuery = string | { _id: string; value: any } | { _id: string; value: any }[];
+
+export interface ISettingBase extends IRocketChatRecord {
 	type:
 		| 'boolean'
 		| 'timezone'
@@ -40,18 +46,20 @@ export interface ISettingBase {
 		| 'asset'
 		| 'roomPick'
 		| 'group'
-		| 'date';
+		| 'date'
+		| 'lookup'
+		| 'timespan';
 	public: boolean;
 	env: boolean;
-	group?: GroupId;
-	section?: SectionName;
-	tab?: TabId;
+	group?: string;
+	section?: string;
+	tab?: string;
 	i18nLabel: string;
 	value: SettingValue;
 	packageValue: SettingValue;
 	blocked: boolean;
-	enableQuery?: string | FilterQuery<ISetting> | FilterQuery<ISetting>[];
-	displayQuery?: string | FilterQuery<ISetting> | FilterQuery<ISetting>[];
+	enableQuery?: EnableQuery;
+	displayQuery?: EnableQuery;
 	sorter: number;
 	properties?: unknown;
 	enterprise?: boolean;
@@ -59,7 +67,7 @@ export interface ISettingBase {
 	hidden?: boolean;
 	modules?: Array<string>;
 	invalidValue?: SettingValue;
-	valueSource?: string;
+	valueSource?: 'packageValue' | 'processEnvValue';
 	secret?: boolean;
 	i18nDescription?: string;
 	autocomplete?: boolean;
@@ -67,10 +75,10 @@ export interface ISettingBase {
 	meteorSettingsValue?: SettingValue;
 	ts: Date;
 	createdAt: Date;
-	_updatedAt?: Date;
 	multiline?: boolean;
 	values?: Array<ISettingSelectOption>;
 	placeholder?: string;
+	lookupEndpoint?: string;
 	wizard?: {
 		step: number;
 		order: number;
@@ -88,7 +96,7 @@ export interface ISettingGroup {
 	ts?: Date;
 	sorter: number;
 	i18nLabel: string;
-	displayQuery?: string | FilterQuery<ISetting> | FilterQuery<ISetting>[];
+	displayQuery?: EnableQuery;
 	i18nDescription: string;
 	value?: undefined;
 	type: 'group';
@@ -118,13 +126,26 @@ export interface ISettingAction extends ISettingBase {
 }
 export interface ISettingAsset extends ISettingBase {
 	type: 'asset';
-	value: AssetValue;
+	value: { url?: string; defaultUrl?: string };
+	fileConstraints: IRocketChatAssetConstraint;
+	asset: string;
 }
 
 export interface ISettingDate extends ISettingBase {
 	type: 'date';
 	value: Date;
 }
+
+// Checks if setting has at least the required properties
+export const isSetting = (setting: any): setting is ISetting =>
+	'_id' in setting &&
+	'type' in setting &&
+	'public' in setting &&
+	'value' in setting &&
+	'packageValue' in setting &&
+	'blocked' in setting &&
+	'sorter' in setting &&
+	'i18nLabel' in setting;
 
 export const isDateSetting = (setting: ISetting): setting is ISettingDate => setting.type === 'date';
 
@@ -164,8 +185,6 @@ export interface ISettingStatistics {
 	pushEnable?: boolean;
 	globalSearchEnabled?: boolean;
 	threadsEnabled?: boolean;
-	bigBlueButton?: boolean;
-	jitsiEnabled?: boolean;
 	webRTCEnableChannel?: boolean;
 	webRTCEnablePrivate?: boolean;
 	webRTCEnableDirect?: boolean;

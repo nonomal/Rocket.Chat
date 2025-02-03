@@ -1,12 +1,16 @@
-import React, { FC } from 'react';
-import { useSubscription } from 'use-subscription';
+import type { ReactElement } from 'react';
+import { useSyncExternalStore } from 'react';
 
-import * as banners from '../../lib/banners';
 import LegacyBanner from './LegacyBanner';
 import UiKitBanner from './UiKitBanner';
+import { useUserBanners } from './hooks/useUserBanners';
+import { withErrorBoundary } from '../../components/withErrorBoundary';
+import * as banners from '../../lib/banners';
 
-const BannerRegion: FC = () => {
-	const payload = useSubscription(banners.firstSubscription);
+const BannerRegion = (): ReactElement | null => {
+	const payload = useSyncExternalStore(...banners.firstSubscription);
+
+	useUserBanners();
 
 	if (!payload) {
 		return null;
@@ -16,7 +20,7 @@ const BannerRegion: FC = () => {
 		return <LegacyBanner config={payload} />;
 	}
 
-	return <UiKitBanner payload={payload} />;
+	return <UiKitBanner key={payload.viewId} initialView={payload} />;
 };
 
-export default BannerRegion;
+export default withErrorBoundary(BannerRegion);

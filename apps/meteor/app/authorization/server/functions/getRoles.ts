@@ -1,5 +1,7 @@
 import type { IRole } from '@rocket.chat/core-typings';
+import { Roles } from '@rocket.chat/models';
 
-import { Roles } from '../../../models/server/raw';
+export const getRoles = async (): Promise<IRole[]> => Roles.find().toArray();
 
-export const getRoles = (): IRole[] => Promise.await(Roles.find().toArray());
+export const getRoleIds = async (): Promise<IRole['_id'][]> =>
+	(await Roles.find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => _id);

@@ -1,21 +1,13 @@
-import React, { ReactElement } from 'react';
-
-import { useVoipRoom } from '../../../../room/contexts/RoomContext';
 import { VoipInfo } from './VoipInfo';
+import { useVoipRoom } from '../../../../room/contexts/RoomContext';
+import { useRoomToolbox } from '../../../../room/contexts/RoomToolboxContext';
 
 // Contextual Bar for room view
-const VoipInfoWithData = ({ tabBar: { close } }: any): ReactElement => {
+const VoipInfoWithData = () => {
 	const room = useVoipRoom();
+	const { closeTab } = useRoomToolbox();
 
-	const onClickReport = (): void => {
-		// TODO: report
-	};
-
-	const onClickCall = (): void => {
-		// TODO: Call
-	};
-
-	return <VoipInfo room={room} onClickClose={close} onClickReport={onClickReport} onClickCall={onClickCall} />;
+	return <VoipInfo room={room} onClickClose={closeTab} />;
 };
 
 export default VoipInfoWithData;

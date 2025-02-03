@@ -1,9 +1,14 @@
 {
 	"$schema": "https://turborepo.org/schema.json",
-	"pipeline": {
-		"build:ci": {
+	"globalDependencies": ["tsconfig.base.json", "tsconfig.base.server.json", "tsconfig.base.client.json"],
+	"tasks": {
+		"build-preview": {
 			"dependsOn": ["^build"],
-			"outputs": ["dist/**"]
+			"outputs": ["storybook-static/**", ".storybook/**", "dist/**"]
+		},
+		".:build-preview-move": {
+			"dependsOn": ["^build-preview"],
+			"cache": false
 		},
 		"build": {
 			"dependsOn": ["^build"],
@@ -11,7 +16,7 @@
 		},
 		"testunit": {
 			"dependsOn": ["build"],
-			"outputs": []
+			"outputs": ["coverage/**"]
 		},
 		"lint": {
 			"dependsOn": ["build"],
@@ -21,11 +26,26 @@
 			"outputs": []
 		},
 		"typecheck": {
-			"dependsOn": ["build"],
+			"dependsOn": ["^build"],
 			"outputs": []
 		},
 		"dev": {
+			"dependsOn": ["^dev"],
+			"cache": false
+		},
+		"dsv": {
 			"dependsOn": ["build"],
+			"cache": false
+		},
+		"ms": {
+			"dependsOn": ["^build"]
+		},
+		"@rocket.chat/meteor#build": {
+			"dependsOn": ["^build"],
+			"cache": false
+		},
+		"@rocket.chat/meteor#build:ci": {
+			"dependsOn": ["^build"],
 			"cache": false
 		}
 	}

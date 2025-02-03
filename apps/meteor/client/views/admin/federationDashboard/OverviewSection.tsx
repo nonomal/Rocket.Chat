@@ -1,31 +1,51 @@
 import { Box, Skeleton } from '@rocket.chat/fuselage';
-import { useTranslation } from '@rocket.chat/ui-contexts';
-import React, { ReactElement, useMemo } from 'react';
+import { useMethod } from '@rocket.chat/ui-contexts';
+import { useQuery } from '@tanstack/react-query';
+import type { ReactElement, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import CounterSet from '../../../components/data/CounterSet';
-import { AsyncStatePhase } from '../../../hooks/useAsyncState';
-import { usePolledMethodData } from '../../../hooks/usePolledMethodData';
+import CounterSet from '../../../components/dataView/CounterSet';
+
+const useOverviewData = (): [eventCount: ReactNode, userCount: ReactNode, serverCount: ReactNode] => {
+	const getFederationOverviewData = useMethod('federation:getOverviewData');
+
+	const result = useQuery({
+		queryKey: ['admin/federation-dashboard/overview'],
+		queryFn: async () => getFederationOverviewData(),
+		refetchInterval: 10_000,
+	});
+
+	if (result.isPending) {
+		return [
+			<Skeleton key='event-count' variant='text' />,
+			<Skeleton key='user-count' variant='text' />,
+			<Skeleton key='server-count' variant='text' />,
+		];
+	}
+
+	if (result.isError) {
+		return [
+			<Box key='event-count' color='status-font-on-danger'>
+				Error
+			</Box>,
+			<Box key='user-count' color='status-font-on-danger'>
+				Error
+			</Box>,
+			<Box key='server-count' color='status-font-on-danger'>
+				Error
+			</Box>,
+		];
+	}
+
+	const { data } = result.data;
+
+	return [data[0].value, data[1].value, data[2].value];
+};
 
 function OverviewSection(): ReactElement {
-	const t = useTranslation();
-	const { value: overviewData, phase: overviewStatus } = usePolledMethodData(
-		'federation:getOverviewData',
-		useMemo(() => [], []),
-		10000,
-	);
+	const { t } = useTranslation();
 
-	const eventCount =
-		(overviewStatus === AsyncStatePhase.LOADING && <Skeleton variant='text' />) ||
-		(overviewStatus === AsyncStatePhase.REJECTED && <Box color='danger'>Error</Box>) ||
-		overviewData?.data[0]?.value;
-	const userCount =
-		(overviewStatus === AsyncStatePhase.LOADING && <Skeleton variant='text' />) ||
-		(overviewStatus === AsyncStatePhase.REJECTED && <Box color='danger'>Error</Box>) ||
-		overviewData?.data[1]?.value;
-	const serverCount =
-		(overviewStatus === AsyncStatePhase.LOADING && <Skeleton variant='text' />) ||
-		(overviewStatus === AsyncStatePhase.REJECTED && <Box color='danger'>Error</Box>) ||
-		overviewData?.data[2]?.value;
+	const [eventCount, userCount, serverCount] = useOverviewData();
 
 	return (
 		<CounterSet

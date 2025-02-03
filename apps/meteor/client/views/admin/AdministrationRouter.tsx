@@ -1,34 +1,56 @@
-import { useCurrentRoute, useRoute } from '@rocket.chat/ui-contexts';
-import React, { Suspense, ReactElement, useEffect } from 'react';
+import { useRouter } from '@rocket.chat/ui-contexts';
+import type { ReactElement, ReactNode } from 'react';
+import { Suspense, useEffect } from 'react';
 
-import PageSkeleton from '../../components/PageSkeleton';
-import SettingsProvider from '../../providers/SettingsProvider';
-import { useUpgradeTabParams } from '../hooks/useUpgradeTabParams';
 import AdministrationLayout from './AdministrationLayout';
+import { getAdminSidebarItems } from './sidebarItems';
+import PageSkeleton from '../../components/PageSkeleton';
+import type { Item, SidebarDivider, SidebarItem } from '../../lib/createSidebarItems';
+import { isGoRocketChatLink } from '../../lib/createSidebarItems';
+import SettingsProvider from '../../providers/SettingsProvider';
 
-const AdministrationRouter = ({ renderRoute }: { renderRoute: () => ReactElement }): ReactElement => {
-	const { tabType, trialEndDate, isLoading } = useUpgradeTabParams();
-	const [routeName] = useCurrentRoute();
-	const defaultRoute = useRoute('admin-info');
-	const upgradeRoute = useRoute('upgrade');
+const isSidebarDivider = (sidebarItem: SidebarItem): sidebarItem is SidebarDivider => {
+	return (sidebarItem as SidebarDivider).divider === true;
+};
 
-	useEffect(() => {
-		if (isLoading || routeName !== 'admin-index') {
-			return;
-		}
+const firstSidebarPage = (sidebarItem: SidebarItem): sidebarItem is Item => {
+	if (isSidebarDivider(sidebarItem)) {
+		return false;
+	}
 
-		if (tabType) {
-			upgradeRoute.replace({ type: tabType }, trialEndDate ? { trialEndDate } : undefined);
-			return;
-		}
+	return Boolean(sidebarItem.permissionGranted?.());
+};
 
-		defaultRoute.replace();
-	}, [defaultRoute, upgradeRoute, routeName, tabType, trialEndDate, isLoading]);
+type AdministrationRouterProps = {
+	children?: ReactNode;
+};
+
+const AdministrationRouter = ({ children }: AdministrationRouterProps): ReactElement => {
+	const router = useRouter();
+
+	useEffect(
+		() =>
+			router.subscribeToRouteChange(() => {
+				if (router.getRouteName() !== 'admin-index') {
+					return;
+				}
+
+				const defaultRoutePath = getAdminSidebarItems().find(firstSidebarPage)?.href ?? '/admin/workspace';
+
+				if (isGoRocketChatLink(defaultRoutePath)) {
+					window.open(defaultRoutePath, '_blank');
+					return;
+				}
+
+				router.navigate(defaultRoutePath, { replace: true });
+			}),
+		[router],
+	);
 
 	return (
 		<AdministrationLayout>
 			<SettingsProvider privileged>
-				{renderRoute ? <Suspense fallback={<PageSkeleton />}>{renderRoute()}</Suspense> : <PageSkeleton />}
+				{children ? <Suspense fallback={<PageSkeleton />}>{children}</Suspense> : <PageSkeleton />}
 			</SettingsProvider>
 		</AdministrationLayout>
 	);

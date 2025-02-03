@@ -1,14 +1,17 @@
+import type { IRoom } from '@rocket.chat/core-typings';
 import Ajv from 'ajv';
 
-import type { IRoom } from '../../../../core-typings/dist';
 import type { PaginatedRequest } from '../../helpers/PaginatedRequest';
 
-const ajv = new Ajv();
+const ajv = new Ajv({ coerceTypes: true });
 
 export type ChannelsMessagesProps = PaginatedRequest<
 	{
 		roomId: IRoom['_id'];
-		// query: { 'mentions._id': { $in: string[] } } | { 'starred._id': { $in: string[] } } | { pinned: boolean };
+		mentionIds?: string;
+		starredIds?: string;
+		pinned?: boolean;
+		query?: Record<string, any>;
 	},
 	'ts'
 >;
@@ -16,12 +19,32 @@ export type ChannelsMessagesProps = PaginatedRequest<
 const channelsMessagesPropsSchema = {
 	type: 'object',
 	properties: {
-		roomId: { type: 'string' },
-		query: { type: 'string' },
-		count: { type: 'number' },
-		offset: { type: 'number' },
+		roomId: {
+			type: 'string',
+		},
+		mentionIds: {
+			type: 'string',
+		},
+		starredIds: {
+			type: 'string',
+		},
+		pinned: {
+			type: 'string',
+		},
+		query: {
+			type: 'string',
+		},
+		count: {
+			type: 'number',
+			nullable: true,
+		},
+		offset: {
+			type: 'number',
+			nullable: true,
+		},
 		sort: {
 			type: 'string',
+			nullable: true,
 		},
 	},
 

@@ -1,10 +1,10 @@
 import type { IRole, IPermission } from '@rocket.chat/core-typings';
-import { useMutableCallback } from '@rocket.chat/fuselage-hooks';
-import { useCallback } from 'react';
+import { useEffectEvent } from '@rocket.chat/fuselage-hooks';
+import { useCallback, useMemo } from 'react';
 
-import { ChatPermissions } from '../../../../../app/authorization/client/lib/ChatPermissions';
+import { useFilteredPermissions } from './useFilteredPermissions';
 import { CONSTANTS } from '../../../../../app/authorization/lib';
-import { Roles } from '../../../../../app/models/client';
+import { Permissions, Roles } from '../../../../../app/models/client';
 import { useReactiveValue } from '../../../../hooks/useReactiveValue';
 
 export const usePermissionsAndRoles = (
@@ -13,27 +13,33 @@ export const usePermissionsAndRoles = (
 	limit = 25,
 	skip = 0,
 ): { permissions: IPermission[]; total: number; roleList: IRole[]; reload: () => void } => {
-	const getPermissions = useCallback(() => {
-		const filterRegExp = new RegExp(filter, 'i');
+	const filteredIds = useFilteredPermissions({ filter });
 
-		return ChatPermissions.find(
-			{
-				level: type === 'permissions' ? { $ne: CONSTANTS.SETTINGS_LEVEL } : CONSTANTS.SETTINGS_LEVEL,
-				_id: filterRegExp,
-			},
-			{
+	const selector = useMemo(() => {
+		return {
+			level: type === 'permissions' ? { $ne: CONSTANTS.SETTINGS_LEVEL } : CONSTANTS.SETTINGS_LEVEL,
+			_id: { $in: filteredIds },
+		};
+	}, [filteredIds, type]);
+
+	const getPermissions = useCallback(
+		() =>
+			Permissions.find(selector, {
 				sort: {
 					_id: 1,
 				},
 				skip,
 				limit,
-			},
-		);
-	}, [filter, limit, skip, type]);
+			}),
+		[selector, skip, limit],
+	);
+
+	const getTotalPermissions = useCallback(() => Permissions.find(selector).count(), [selector]);
 
 	const permissions = useReactiveValue(getPermissions);
-	const getRoles = useMutableCallback(() => Roles.find().fetch());
+	const permissionsTotal = useReactiveValue(getTotalPermissions);
+	const getRoles = useEffectEvent(() => Roles.find().fetch());
 	const roles = useReactiveValue(getRoles);
 
-	return { permissions: permissions.fetch(), total: permissions.count(false), roleList: roles, reload: getRoles };
+	return { permissions: permissions.fetch(), total: permissionsTotal, roleList: roles, reload: getRoles };
 };

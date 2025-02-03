@@ -1,12 +1,12 @@
-import xmldom from 'xmldom';
-import xmlenc from 'xml-encryption';
+import xmldom from '@xmldom/xmldom';
 import xmlCrypto from 'xml-crypto';
+import xmlenc from 'xml-encryption';
 
+import type { ISAMLAssertion } from '../../definition/ISAMLAssertion';
+import type { IServiceProviderOptions } from '../../definition/IServiceProviderOptions';
+import type { IResponseValidateCallback } from '../../definition/callbacks';
 import { SAMLUtils } from '../Utils';
 import { StatusCode } from '../constants';
-import { IServiceProviderOptions } from '../../definition/IServiceProviderOptions';
-import { IResponseValidateCallback } from '../../definition/callbacks';
-import { ISAMLAssertion } from '../../definition/ISAMLAssertion';
 
 type XmlParent = Element | Document;
 
@@ -21,9 +21,44 @@ export class ResponseParser {
 		// We currently use RelayState to save SAML provider
 		SAMLUtils.log(`Validating response with relay state: ${xml}`);
 
-		const doc = new xmldom.DOMParser().parseFromString(xml, 'text/xml');
+		let error: Error | null = null;
+
+		const doc = new xmldom.DOMParser({
+			errorHandler: {
+				fatalError: (e: any) => {
+					if (e instanceof Error) {
+						error = e;
+						return;
+					}
+
+					if (typeof e === 'string') {
+						error = new Error(e);
+						return;
+					}
+
+					error = new Error();
+				},
+				error: (e: Error) => {
+					if (e instanceof Error) {
+						error = e;
+						return;
+					}
+
+					if (typeof e === 'string') {
+						error = new Error(e);
+						return;
+					}
+
+					error = new Error();
+				},
+			},
+		}).parseFromString(xml, 'text/xml');
 		if (!doc) {
 			return callback('No Doc Found');
+		}
+
+		if (error) {
+			return callback(error, null, false);
 		}
 
 		const allResponses = doc.getElementsByTagNameNS('urn:oasis:names:tc:SAML:2.0:protocol', 'Response');
@@ -62,7 +97,7 @@ export class ResponseParser {
 
 			this.verifySignatures(response, assertionData, xml);
 		} catch (e) {
-			return callback(e, null, false);
+			return callback(e instanceof Error ? e : String(e), null, false);
 		}
 
 		const profile: Record<string, any> = {};
@@ -74,7 +109,7 @@ export class ResponseParser {
 		try {
 			issuer = this.getIssuer(assertion);
 		} catch (e) {
-			return callback(e, null, false);
+			return callback(e instanceof Error ? e : String(e), null, false);
 		}
 
 		if (issuer) {
@@ -95,14 +130,14 @@ export class ResponseParser {
 			try {
 				this.validateSubjectConditions(subject);
 			} catch (e) {
-				return callback(e, null, false);
+				return callback(e instanceof Error ? e : String(e), null, false);
 			}
 		}
 
 		try {
 			this.validateAssertionConditions(assertion);
 		} catch (e) {
-			return callback(e, null, false);
+			return callback(e instanceof Error ? e : String(e), null, false);
 		}
 
 		const authnStatement = assertion.getElementsByTagNameNS('urn:oasis:names:tc:SAML:2.0:assertion', 'AuthnStatement')[0];
@@ -175,7 +210,7 @@ export class ResponseParser {
 		if (typeof encAssertion !== 'undefined') {
 			const options = { key: this.serviceProviderOptions.privateKey };
 			const encData = encAssertion.getElementsByTagNameNS('*', 'EncryptedData')[0];
-			xmlenc.decrypt(encData, options, function (err, result) {
+			xmlenc.decrypt(encData, options, (err, result) => {
 				if (err) {
 					SAMLUtils.error(err);
 				}
@@ -287,9 +322,8 @@ export class ResponseParser {
 		const sig = new xmlCrypto.SignedXml();
 
 		sig.keyInfoProvider = {
-			getKeyInfo: (/* key*/): string => '<X509Data></X509Data>',
-			// @ts-ignore - the definition file must be wrong
-			getKey: (/* keyInfo*/): string => SAMLUtils.certToPEM(cert),
+			getKeyInfo: () => '<X509Data></X509Data>',
+			getKey: () => Buffer.from(SAMLUtils.certToPEM(cert)),
 		};
 
 		sig.loadSignature(signature);

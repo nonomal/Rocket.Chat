@@ -1,11 +1,11 @@
 import type { ISetting } from '@rocket.chat/core-typings';
-import { useContext, useMemo } from 'react';
-import { useSubscription } from 'use-subscription';
+import { useContext, useMemo, useSyncExternalStore } from 'react';
 
-import { SettingsContext, SettingsContextQuery } from '../SettingsContext';
+import type { SettingsContextQuery } from '../SettingsContext';
+import { SettingsContext } from '../SettingsContext';
 
 export const useSettings = (query?: SettingsContextQuery): ISetting[] => {
 	const { querySettings } = useContext(SettingsContext);
-	const subscription = useMemo(() => querySettings(query ?? {}), [querySettings, query]);
-	return useSubscription(subscription);
+	const [subscribe, getSnapshot] = useMemo(() => querySettings(query ?? {}), [querySettings, query]);
+	return useSyncExternalStore(subscribe, getSnapshot);
 };

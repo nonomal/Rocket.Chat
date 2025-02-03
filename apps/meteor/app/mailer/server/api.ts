@@ -1,17 +1,19 @@
-import { Meteor } from 'meteor/meteor';
-import { Email } from 'meteor/email';
-import { TAPi18n } from 'meteor/rocketchat:tap-i18n';
-import _ from 'underscore';
-import s from 'underscore.string';
-import juice from 'juice';
-import stripHtml from 'string-strip-html';
-import { escapeHTML } from '@rocket.chat/string-helpers';
+import { AppEvents, Apps } from '@rocket.chat/apps';
 import type { ISetting } from '@rocket.chat/core-typings';
+import { Settings } from '@rocket.chat/models';
+import { escapeHTML } from '@rocket.chat/string-helpers';
+import juice from 'juice';
+import { Email } from 'meteor/email';
+import { Meteor } from 'meteor/meteor';
+import { stripHtml } from 'string-strip-html';
+import _ from 'underscore';
 
-import { settings } from '../../settings/server';
 import { replaceVariables } from './replaceVariables';
-import { Apps } from '../../apps/server';
 import { validateEmail } from '../../../lib/emailValidator';
+import { strLeft, strRightBack } from '../../../lib/utils/stringUtils';
+import { i18n } from '../../../server/lib/i18n';
+import { notifyOnSettingChanged } from '../../lib/server/lib/notifyListener';
+import { settings } from '../../settings/server';
 
 let contentHeader: string | undefined;
 let contentFooter: string | undefined;
@@ -27,7 +29,7 @@ settings.watch<string>('Language', (value) => {
 export const replacekey = (str: string, key: string, value = ''): string =>
 	str.replace(new RegExp(`(\\[${key}\\]|__${key}__)`, 'igm'), value);
 
-export const translate = (str: string): string => replaceVariables(str, (_match, key) => TAPi18n.__(key, { lng }));
+export const translate = (str: string): string => replaceVariables(str, (_match, key) => i18n.t(key, { lng }));
 
 export const replace = (str: string, data: { [key: string]: unknown } = {}): string => {
 	if (!str) {
@@ -35,17 +37,14 @@ export const replace = (str: string, data: { [key: string]: unknown } = {}): str
 	}
 
 	const options = {
-		// eslint-disable-next-line @typescript-eslint/camelcase
 		Site_Name: settings.get<string>('Site_Name'),
-		// eslint-disable-next-line @typescript-eslint/camelcase
 		Site_URL: settings.get<string>('Site_Url'),
-		// eslint-disable-next-line @typescript-eslint/camelcase
 		Site_URL_Slash: settings.get<string>('Site_Url')?.replace(/\/?$/, '/'),
 		...(data.name
 			? {
-					fname: s.strLeft(String(data.name), ' '),
-					lname: s.strRightBack(String(data.name), ' '),
-			  }
+					fname: strLeft(String(data.name), ' '),
+					lname: strRightBack(String(data.name), ' '),
+				}
 			: {}),
 		...data,
 	};
@@ -60,9 +59,7 @@ export const replaceEscaped = (str: string, data: { [key: string]: unknown } = {
 	const siteUrl = settings.get<string>('Site_Url');
 
 	return replace(str, {
-		// eslint-disable-next-line @typescript-eslint/camelcase
 		Site_Name: siteName ? escapeHTML(siteName) : undefined,
-		// eslint-disable-next-line @typescript-eslint/camelcase
 		Site_Url: siteUrl ? escapeHTML(siteUrl) : undefined,
 		...Object.entries(data).reduce<{ [key: string]: string }>((ret, [key, value]) => {
 			if (value !== undefined && value !== null) {
@@ -79,11 +76,12 @@ export const wrap = (html: string, data: { [key: string]: unknown } = {}): strin
 	}
 
 	if (!body) {
-		throw new Error('`body` is not set yet');
+		throw new Error('error-email-body-not-initialized');
 	}
 
 	return replaceEscaped(body.replace('{{body}}', html), data);
 };
+
 export const inlinecss = (html: string): string => {
 	const css = settings.get<string>('email_style');
 	return css ? juice.inlineContent(html, css) : html;
@@ -140,7 +138,7 @@ settings.watchMultiple(['Email_Header', 'Email_Footer'], () => {
 export const checkAddressFormat = (adresses: string | string[]): boolean =>
 	([] as string[]).concat(adresses).every((address) => validateEmail(address));
 
-export const sendNoWrap = ({
+export const sendNoWrap = async ({
 	to,
 	from,
 	replyTo,
@@ -149,14 +147,14 @@ export const sendNoWrap = ({
 	text,
 	headers,
 }: {
-	to: string;
+	to: string | string[];
 	from: string;
 	replyTo?: string;
 	subject: string;
 	html?: string;
 	text?: string;
 	headers?: string;
-}): void => {
+}) => {
 	if (!checkAddressFormat(to)) {
 		throw new Meteor.Error('invalid email');
 	}
@@ -169,14 +167,19 @@ export const sendNoWrap = ({
 		html = undefined;
 	}
 
+	const value = await Settings.incrementValueById('Triggered_Emails_Count', 1, { returnDocument: 'after' });
+	if (value) {
+		void notifyOnSettingChanged(value);
+	}
+
 	const email = { to, from, replyTo, subject, html, text, headers };
 
-	const eventResult = Promise.await(Apps.triggerEvent('IPreEmailSent', { email }));
+	const eventResult = await Apps.self?.triggerEvent(AppEvents.IPreEmailSent, { email });
 
-	Meteor.defer(() => Email.send(eventResult || email));
+	setImmediate(() => Email.sendAsync(eventResult || email).catch((e) => console.error(e)));
 };
 
-export const send = ({
+export const send = async ({
 	to,
 	from,
 	replyTo,
@@ -186,7 +189,7 @@ export const send = ({
 	data,
 	headers,
 }: {
-	to: string;
+	to: string | string[];
 	from: string;
 	replyTo?: string;
 	subject: string;
@@ -194,7 +197,7 @@ export const send = ({
 	text?: string;
 	headers?: string;
 	data?: { [key: string]: unknown };
-}): void =>
+}): Promise<void> =>
 	sendNoWrap({
 		to,
 		from,

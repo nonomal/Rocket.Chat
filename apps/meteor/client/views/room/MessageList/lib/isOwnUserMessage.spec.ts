@@ -1,13 +1,11 @@
-/* eslint-env mocha */
 import type { IMessage, ISubscription } from '@rocket.chat/core-typings';
-import { expect } from 'chai';
 
-import { MessageTypes } from '../../../../../app/ui-utils/lib/MessageTypes';
 import { isOwnUserMessage } from './isOwnUserMessage';
+import { MessageTypes } from '../../../../../app/ui-utils/lib/MessageTypes';
 
 const date = new Date('2021-10-27T00:00:00.000Z');
 
-const baseMessage = {
+const baseMessage: IMessage = {
 	ts: date,
 	u: {
 		_id: 'userId',
@@ -25,43 +23,41 @@ const baseMessage = {
 MessageTypes.registerType({
 	id: 'au',
 	system: true,
-	message: 'User_added_by',
+	message: 'User_added_to',
 });
 
-describe('isUserMessage', () => {
-	it('should return true if the message is from user', () => {
-		const message: IMessage = {
-			...baseMessage,
-		};
+it('should return true if the message is from user', () => {
+	const message: IMessage = {
+		...baseMessage,
+	};
 
-		const subscription: ISubscription = {
-			u: {
-				_id: 'userId',
-			},
-		} as ISubscription;
+	const subscription: ISubscription = {
+		u: {
+			_id: 'userId',
+		},
+	} as ISubscription;
 
-		expect(isOwnUserMessage(message, subscription)).to.be.true;
-	});
+	expect(isOwnUserMessage(message, subscription)).toBe(true);
+});
 
-	it('should return false if the message is not from user', () => {
-		const message: IMessage = {
-			...baseMessage,
-		};
+it('should return false if the message is not from user', () => {
+	const message: IMessage = {
+		...baseMessage,
+	};
 
-		const subscription: ISubscription = {
-			u: {
-				_id: 'otherUser',
-			},
-		} as ISubscription;
+	const subscription: ISubscription = {
+		u: {
+			_id: 'otherUser',
+		},
+	} as ISubscription;
 
-		expect(isOwnUserMessage(message, subscription)).to.be.false;
-	});
+	expect(isOwnUserMessage(message, subscription)).toBe(false);
+});
 
-	it('should return false if there is no subscription', () => {
-		const message: IMessage = {
-			...baseMessage,
-		};
+it('should return false if there is no subscription', () => {
+	const message: IMessage = {
+		...baseMessage,
+	};
 
-		expect(isOwnUserMessage(message, undefined)).to.be.false;
-	});
+	expect(isOwnUserMessage(message, undefined)).toBe(false);
 });

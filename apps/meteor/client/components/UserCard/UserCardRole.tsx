@@ -1,9 +1,9 @@
 import { Box, Tag } from '@rocket.chat/fuselage';
-import React, { ReactNode, ReactElement } from 'react';
+import type { ReactNode, ReactElement } from 'react';
 
 const UserCardRole = ({ children }: { children: ReactNode }): ReactElement => (
-	<Box m='x2' fontScale='c2'>
-		<Tag disabled children={children} />
+	<Box m={2} fontScale='c2'>
+		<Tag children={children} />
 	</Box>
 );
 

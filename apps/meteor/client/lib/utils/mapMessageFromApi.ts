@@ -1,11 +1,11 @@
-import type { IMessage } from '@rocket.chat/core-typings';
-import { Serialized } from '@rocket.chat/core-typings';
+import type { IMessage, Serialized } from '@rocket.chat/core-typings';
 
 export const mapMessageFromApi = ({
-	attachments = [],
+	attachments,
 	tlm,
 	ts,
 	_updatedAt,
+	pinnedAt,
 	webRtcCallEndTs,
 	...message
 }: Serialized<IMessage>): IMessage => ({
@@ -13,9 +13,12 @@ export const mapMessageFromApi = ({
 	ts: new Date(ts),
 	...(tlm && { tlm: new Date(tlm) }),
 	_updatedAt: new Date(_updatedAt),
+	...(pinnedAt && { pinnedAt: new Date(pinnedAt) }),
 	...(webRtcCallEndTs && { webRtcCallEndTs: new Date(webRtcCallEndTs) }),
-	attachments: attachments.map(({ ts, ...attachment }) => ({
-		...(ts && { ts: new Date(ts) }),
-		...attachment,
-	})),
+	...(attachments && {
+		attachments: attachments.map(({ ts, ...attachment }) => ({
+			...(ts && { ts: new Date(ts) }),
+			...(attachment as any),
+		})),
+	}),
 });

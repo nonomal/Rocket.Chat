@@ -1,76 +1,57 @@
-import { useLayout, useCurrentRoute } from '@rocket.chat/ui-contexts';
-import React, { FC, useMemo } from 'react';
+import { useLayout, useRouter } from '@rocket.chat/ui-contexts';
+import type { ReactNode } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 
-import BurgerMenu from '../../../../components/BurgerMenu';
-import TemplateHeader from '../../../../components/Header';
+import { HeaderToolbar } from '../../../../components/Header';
+import SidebarToggler from '../../../../components/SidebarToggler';
 import { useOmnichannelRoom } from '../../contexts/RoomContext';
-import { ToolboxActionConfig } from '../../lib/Toolbox';
-import { ToolboxContext, useToolboxContext } from '../../lib/Toolbox/ToolboxContext';
 import RoomHeader from '../RoomHeader';
 import { BackButton } from './BackButton';
+import OmnichannelRoomHeaderTag from './OmnichannelRoomHeaderTag';
 import QuickActions from './QuickActions';
-import { useQuickActions } from './QuickActions/hooks/useQuickActions';
 
 type OmnichannelRoomHeaderProps = {
 	slots: {
-		start?: unknown;
-		preContent?: unknown;
-		insideContent?: unknown;
-		posContent?: unknown;
-		end?: unknown;
+		start?: ReactNode;
+		preContent?: ReactNode;
+		insideContent?: ReactNode;
+		posContent?: ReactNode;
+		end?: ReactNode;
 		toolbox?: {
-			pre?: unknown;
-			content?: unknown;
-			pos?: unknown;
+			pre?: ReactNode;
+			content?: ReactNode;
+			pos?: ReactNode;
 		};
 	};
 };
 
-const OmnichannelRoomHeader: FC<OmnichannelRoomHeaderProps> = ({ slots: parentSlot }) => {
-	const [name] = useCurrentRoute();
+const OmnichannelRoomHeader = ({ slots: parentSlot }: OmnichannelRoomHeaderProps) => {
+	const router = useRouter();
+
+	const currentRouteName = useSyncExternalStore(
+		router.subscribeToRouteChange,
+		useCallback(() => router.getRouteName(), [router]),
+	);
+
 	const { isMobile } = useLayout();
 	const room = useOmnichannelRoom();
-	const { visibleActions, getAction } = useQuickActions(room);
-	const context = useToolboxContext();
 
 	const slots = useMemo(
 		() => ({
 			...parentSlot,
-			start: (!!isMobile || name === 'omnichannel-directory' || name === 'omnichannel-current-chats') && (
-				<TemplateHeader.ToolBox>
-					{isMobile && <BurgerMenu />}
-					{<BackButton routeName={name} />}
-				</TemplateHeader.ToolBox>
+			start: (!!isMobile || currentRouteName === 'omnichannel-directory' || currentRouteName === 'omnichannel-current-chats') && (
+				<HeaderToolbar>
+					{isMobile && <SidebarToggler />}
+					<BackButton routeName={currentRouteName} />
+				</HeaderToolbar>
 			),
-			...(!isMobile && { insideContent: <QuickActions room={room} /> }),
+			insideContent: <OmnichannelRoomHeaderTag />,
+			posContent: <QuickActions />,
 		}),
-		[isMobile, name, parentSlot, room],
+		[isMobile, currentRouteName, parentSlot],
 	);
-	return (
-		<ToolboxContext.Provider
-			value={useMemo(
-				() => ({
-					...context,
-					actions: new Map([
-						...(isMobile
-							? (visibleActions.map((action) => [
-									action.id,
-									{
-										...action,
-										action: (): unknown => getAction(action.id),
-										order: (action.order || 0) - 10,
-									},
-							  ]) as [string, ToolboxActionConfig][])
-							: []),
-						...(Array.from(context.actions.entries()) as [string, ToolboxActionConfig][]),
-					]),
-				}),
-				[context, isMobile, visibleActions, getAction],
-			)}
-		>
-			<RoomHeader slots={slots} room={room} />
-		</ToolboxContext.Provider>
-	);
+
+	return <RoomHeader slots={slots} room={room} />;
 };
 
 export default OmnichannelRoomHeader;

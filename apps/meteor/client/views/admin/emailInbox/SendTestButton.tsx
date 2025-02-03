@@ -1,33 +1,40 @@
-import { Button, Icon, TableCell } from '@rocket.chat/fuselage';
-import { useToastMessageDispatch, useEndpoint, useTranslation } from '@rocket.chat/ui-contexts';
-import React, { ReactElement } from 'react';
+import type { IEmailInboxPayload } from '@rocket.chat/core-typings';
+import { Button } from '@rocket.chat/fuselage';
+import { useToastMessageDispatch, useEndpoint } from '@rocket.chat/ui-contexts';
+import type { MouseEvent, ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 
-type SendTestButtonProps = {
-	id: string;
-};
+import { GenericTableCell } from '../../../components/GenericTable';
 
-const SendTestButton = ({ id }: SendTestButtonProps): ReactElement => {
-	const t = useTranslation();
-
+const SendTestButton = ({ id }: { id: IEmailInboxPayload['_id'] }): ReactElement => {
+	const { t } = useTranslation();
 	const dispatchToastMessage = useToastMessageDispatch();
-	const sendTest = useEndpoint('POST', `email-inbox.send-test/${id}`);
+	const sendTest = useEndpoint('POST', '/v1/email-inbox.send-test/:_id', { _id: id });
 
-	const handleOnClick = (e: React.MouseEvent<HTMLElement, MouseEvent>): void => {
+	const handleOnClick = async (e: MouseEvent<HTMLElement>): Promise<void> => {
 		e.preventDefault();
 		e.stopPropagation();
-		sendTest();
-		dispatchToastMessage({
-			type: 'success',
-			message: t('Email_sent'),
-		});
+
+		try {
+			await sendTest();
+			dispatchToastMessage({
+				type: 'success',
+				message: t('Email_sent'),
+			});
+		} catch (error) {
+			dispatchToastMessage({
+				type: 'error',
+				message: error,
+			});
+		}
 	};
 
 	return (
-		<TableCell fontScale='p2' color='hint' withTruncatedText>
-			<Button small ghost title={t('Send_Test_Email')} onClick={handleOnClick}>
-				<Icon name='send' size='x20' />
+		<GenericTableCell withTruncatedText>
+			<Button icon='send' small onClick={handleOnClick}>
+				{t('Send_Test_Email')}
 			</Button>
-		</TableCell>
+		</GenericTableCell>
 	);
 };
 

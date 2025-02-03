@@ -1,77 +1,85 @@
+import { api } from '@rocket.chat/core-services';
+import { isRegisterUser } from '@rocket.chat/core-typings';
+import type { SlashCommandCallbackParams } from '@rocket.chat/core-typings';
+import { Users, Rooms } from '@rocket.chat/models';
 import { Meteor } from 'meteor/meteor';
-import { TAPi18n } from 'meteor/rocketchat:tap-i18n';
 
-import { Rooms, Messages } from '../../models/server';
-import { slashCommands } from '../../utils/lib/slashCommand';
-import { settings } from '../../settings/server';
-import { api } from '../../../server/sdk/api';
-import { roomCoordinator } from '../../../server/lib/rooms/roomCoordinator';
 import { RoomMemberActions } from '../../../definition/IRoomTypeConfig';
+import { i18n } from '../../../server/lib/i18n';
+import { roomCoordinator } from '../../../server/lib/rooms/roomCoordinator';
+import { hasPermissionAsync } from '../../authorization/server/functions/hasPermission';
+import { unarchiveRoom } from '../../lib/server/functions/unarchiveRoom';
+import { settings } from '../../settings/server';
+import { slashCommands } from '../../utils/server/slashCommand';
 
-function Unarchive(_command: 'unarchive', params: string, item: Record<string, string>): void | Promise<void> | Function {
-	let channel = params.trim();
-	let room;
+slashCommands.add({
+	command: 'unarchive',
+	callback: async function Unarchive({ params, message, userId }: SlashCommandCallbackParams<'unarchive'>): Promise<void> {
+		let channel = params.trim();
+		let room;
 
-	if (channel === '') {
-		room = Rooms.findOneById(item.rid);
-		channel = room.name;
-	} else {
-		channel = channel.replace('#', '');
-		room = Rooms.findOneByName(channel);
-	}
+		if (channel === '') {
+			room = await Rooms.findOneById(message.rid);
+			if (room?.name) {
+				channel = room.name;
+			}
+		} else {
+			channel = channel.replace('#', '');
+			room = await Rooms.findOneByName(channel);
+		}
 
-	const userId = Meteor.userId() as string;
+		if (!userId) {
+			throw new Meteor.Error('error-invalid-user', 'Invalid user', { method: 'archiveRoom' });
+		}
 
-	if (!room) {
-		return api.broadcast('notify.ephemeralMessage', userId, item.rid, {
-			msg: TAPi18n.__('Channel_doesnt_exist', {
+		const user = await Users.findOneById(userId, { projection: { username: 1, name: 1 } });
+		if (!user || !isRegisterUser(user)) {
+			throw new Meteor.Error('error-invalid-user', 'Invalid user', { method: 'archiveRoom' });
+		}
+
+		if (!room) {
+			void api.broadcast('notify.ephemeralMessage', userId, message.rid, {
+				msg: i18n.t('Channel_doesnt_exist', {
+					postProcess: 'sprintf',
+					sprintf: [channel],
+					lng: settings.get('Language') || 'en',
+				}),
+			});
+			return;
+		}
+
+		if (!(await roomCoordinator.getRoomDirectives(room.t).allowMemberAction(room, RoomMemberActions.ARCHIVE, userId))) {
+			throw new Meteor.Error('error-room-type-not-unarchivable', `Room type: ${room.t} can not be unarchived`);
+		}
+
+		if (!(await hasPermissionAsync(userId, 'unarchive-room', room._id))) {
+			throw new Meteor.Error('error-not-authorized', 'Not authorized');
+		}
+
+		if (!room.archived) {
+			void api.broadcast('notify.ephemeralMessage', userId, message.rid, {
+				msg: i18n.t('Channel_already_Unarchived', {
+					postProcess: 'sprintf',
+					sprintf: [channel],
+					lng: settings.get('Language') || 'en',
+				}),
+			});
+			return;
+		}
+
+		await unarchiveRoom(room._id, user);
+
+		void api.broadcast('notify.ephemeralMessage', userId, message.rid, {
+			msg: i18n.t('Channel_Unarchived', {
 				postProcess: 'sprintf',
 				sprintf: [channel],
 				lng: settings.get('Language') || 'en',
 			}),
 		});
-	}
-
-	// You can not archive direct messages.
-	if (!roomCoordinator.getRoomDirectives(room.t)?.allowMemberAction(room, RoomMemberActions.ARCHIVE)) {
-		return;
-	}
-
-	if (!room.archived) {
-		api.broadcast('notify.ephemeralMessage', userId, item.rid, {
-			msg: TAPi18n.__('Channel_already_Unarchived', {
-				postProcess: 'sprintf',
-				sprintf: [channel],
-				lng: settings.get('Language') || 'en',
-			}),
-		});
-		return;
-	}
-
-	Meteor.call('unarchiveRoom', room._id);
-
-	Messages.createRoomUnarchivedByRoomIdAndUser(room._id, Meteor.user());
-	api.broadcast('notify.ephemeralMessage', userId, item.rid, {
-		msg: TAPi18n.__('Channel_Unarchived', {
-			postProcess: 'sprintf',
-			sprintf: [channel],
-			lng: settings.get('Language') || 'en',
-		}),
-	});
-
-	return Unarchive;
-}
-
-slashCommands.add(
-	'unarchive',
-	Unarchive,
-	{
+	},
+	options: {
 		description: 'Unarchive',
 		params: '#channel',
 		permission: 'unarchive-room',
 	},
-	undefined,
-	false,
-	undefined,
-	undefined,
-);
+});

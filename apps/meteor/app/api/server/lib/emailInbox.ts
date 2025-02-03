@@ -1,21 +1,18 @@
-import { IEmailInbox } from '@rocket.chat/core-typings';
-import { InsertOneWriteOpResult, UpdateWriteOpResult, WithId } from 'mongodb';
+import type { IEmailInbox } from '@rocket.chat/core-typings';
+import { EmailInbox, Users } from '@rocket.chat/models';
+import type { DeleteResult, Filter, InsertOneResult, Sort } from 'mongodb';
 
-import { EmailInbox } from '../../../models/server/raw';
-import { hasPermissionAsync } from '../../../authorization/server/functions/hasPermission';
-import { Users } from '../../../models/server';
+import { notifyOnEmailInboxChanged } from '../../../lib/server/lib/notifyListener';
 
 export const findEmailInboxes = async ({
-	userId,
 	query = {},
 	pagination: { offset, count, sort },
 }: {
-	userId: string;
-	query?: {};
+	query?: Filter<IEmailInbox>;
 	pagination: {
 		offset: number;
 		count: number;
-		sort?: {};
+		sort?: Sort;
 	};
 }): Promise<{
 	emailInboxes: IEmailInbox[];
@@ -23,18 +20,13 @@ export const findEmailInboxes = async ({
 	count: number;
 	offset: number;
 }> => {
-	if (!(await hasPermissionAsync(userId, 'manage-email-inbox'))) {
-		throw new Error('error-not-allowed');
-	}
-	const cursor = EmailInbox.find(query, {
+	const { cursor, totalCount } = EmailInbox.findPaginated(query, {
 		sort: sort || { name: 1 },
 		skip: offset,
 		limit: count,
 	});
 
-	const total = await cursor.count();
-
-	const emailInboxes = await cursor.toArray();
+	const [emailInboxes, total] = await Promise.all([cursor.toArray(), totalCount]);
 
 	return {
 		emailInboxes,
@@ -44,36 +36,30 @@ export const findEmailInboxes = async ({
 	};
 };
 
-export const findOneEmailInbox = async ({ userId, _id }: { userId: string; _id: string }): Promise<IEmailInbox | null> => {
-	if (!(await hasPermissionAsync(userId, 'manage-email-inbox'))) {
-		throw new Error('error-not-allowed');
-	}
-	return EmailInbox.findOneById(_id);
-};
 export const insertOneEmailInbox = async (
 	userId: string,
 	emailInboxParams: Pick<IEmailInbox, 'active' | 'name' | 'email' | 'description' | 'senderInfo' | 'department' | 'smtp' | 'imap'>,
-): Promise<InsertOneWriteOpResult<WithId<IEmailInbox>>> => {
+): Promise<InsertOneResult<IEmailInbox>> => {
 	const obj = {
 		...emailInboxParams,
 		_createdAt: new Date(),
 		_updatedAt: new Date(),
-		_createdBy: Users.findOne(userId, { fields: { username: 1 } }),
+		_createdBy: await Users.findOneById(userId, { projection: { username: 1 } }),
 	};
-	return EmailInbox.insertOne(obj);
+
+	const response = await EmailInbox.create(obj);
+
+	if (response.insertedId) {
+		void notifyOnEmailInboxChanged({ _id: response.insertedId, ...obj }, 'inserted');
+	}
+
+	return response;
 };
 
 export const updateEmailInbox = async (
-	userId: string,
 	emailInboxParams: Pick<IEmailInbox, '_id' | 'active' | 'name' | 'email' | 'description' | 'senderInfo' | 'department' | 'smtp' | 'imap'>,
-): Promise<InsertOneWriteOpResult<WithId<IEmailInbox>> | UpdateWriteOpResult> => {
+): Promise<Pick<IEmailInbox, '_id'> | null> => {
 	const { _id, active, name, email, description, senderInfo, department, smtp, imap } = emailInboxParams;
-
-	const emailInbox = await findOneEmailInbox({ userId, _id });
-
-	if (!emailInbox) {
-		throw new Error('error-invalid-email-inbox');
-	}
 
 	const updateEmailInbox = {
 		$set: {
@@ -90,12 +76,29 @@ export const updateEmailInbox = async (
 		...(department === 'All' && { $unset: { department: 1 as const } }),
 	};
 
-	return EmailInbox.updateOne({ _id }, updateEmailInbox);
+	const updatedResponse = await EmailInbox.updateById(_id, updateEmailInbox);
+
+	if (!updatedResponse) {
+		throw new Error('error-invalid-email-inbox');
+	}
+
+	void notifyOnEmailInboxChanged(
+		{
+			...updatedResponse,
+			...(department === 'All' && { department: undefined }),
+		},
+		'updated',
+	);
+
+	return updatedResponse;
 };
 
-export const findOneEmailInboxByEmail = async ({ userId, email }: { userId: string; email: string }): Promise<IEmailInbox | null> => {
-	if (!(await hasPermissionAsync(userId, 'manage-email-inbox'))) {
-		throw new Error('error-not-allowed');
+export const removeEmailInbox = async (emailInboxId: IEmailInbox['_id']): Promise<DeleteResult> => {
+	const removeResponse = await EmailInbox.removeById(emailInboxId);
+
+	if (removeResponse.deletedCount) {
+		void notifyOnEmailInboxChanged({ _id: emailInboxId }, 'removed');
 	}
-	return EmailInbox.findOne({ email });
+
+	return removeResponse;
 };

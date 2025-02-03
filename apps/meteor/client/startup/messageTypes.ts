@@ -3,18 +3,15 @@ import { escapeHTML } from '@rocket.chat/string-helpers';
 import { Meteor } from 'meteor/meteor';
 
 import { MessageTypes } from '../../app/ui-utils/client';
-import { t } from '../../app/utils/client';
+import { t } from '../../app/utils/lib/i18n';
 
 Meteor.startup(() => {
 	MessageTypes.registerType({
 		id: 'room_changed_privacy',
 		system: true,
-		message: 'room_changed_privacy',
+		message: 'room_changed_type',
 		data(message: IMessage) {
 			return {
-				// eslint-disable-next-line @typescript-eslint/camelcase
-				user_by: message.u && message.u.username,
-				// eslint-disable-next-line @typescript-eslint/camelcase
 				room_type: t(message.msg),
 			};
 		},
@@ -23,12 +20,9 @@ Meteor.startup(() => {
 	MessageTypes.registerType({
 		id: 'room_changed_topic',
 		system: true,
-		message: 'room_changed_topic',
+		message: 'room_changed_topic_to',
 		data(message: IMessage) {
 			return {
-				// eslint-disable-next-line @typescript-eslint/camelcase
-				user_by: message.u && message.u.username,
-				// eslint-disable-next-line @typescript-eslint/camelcase
 				room_topic: escapeHTML(message.msg || `(${t('None').toLowerCase()})`),
 			};
 		},
@@ -37,24 +31,15 @@ Meteor.startup(() => {
 	MessageTypes.registerType({
 		id: 'room_changed_avatar',
 		system: true,
-		message: 'room_changed_avatar',
-		data(message: IMessage) {
-			return {
-				// eslint-disable-next-line @typescript-eslint/camelcase
-				user_by: message.u && message.u.username,
-			};
-		},
+		message: 'room_avatar_changed',
 	});
 
 	MessageTypes.registerType({
 		id: 'room_changed_announcement',
 		system: true,
-		message: 'room_changed_announcement',
+		message: 'changed_room_announcement_to__room_announcement_',
 		data(message: IMessage) {
 			return {
-				// eslint-disable-next-line @typescript-eslint/camelcase
-				user_by: message.u && message.u.username,
-				// eslint-disable-next-line @typescript-eslint/camelcase
 				room_announcement: escapeHTML(message.msg || `(${t('None').toLowerCase()})`),
 			};
 		},
@@ -63,14 +48,23 @@ Meteor.startup(() => {
 	MessageTypes.registerType({
 		id: 'room_changed_description',
 		system: true,
-		message: 'room_changed_description',
+		message: 'changed_room_description_to__room_description_',
 		data(message: IMessage) {
 			return {
-				// eslint-disable-next-line @typescript-eslint/camelcase
-				user_by: message.u && message.u.username,
-				// eslint-disable-next-line @typescript-eslint/camelcase
 				room_description: escapeHTML(message.msg || `(${t('None').toLowerCase()})`),
 			};
 		},
+	});
+
+	MessageTypes.registerType({
+		id: 'message_pinned',
+		system: true,
+		message: 'Pinned_a_message',
+	});
+
+	MessageTypes.registerType({
+		id: 'message_pinned_e2e',
+		system: true,
+		message: 'Pinned_a_message',
 	});
 });

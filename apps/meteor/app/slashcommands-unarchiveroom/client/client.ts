@@ -1,15 +1,11 @@
-import { slashCommands } from '../../utils/lib/slashCommand';
+import { slashCommands } from '../../utils/client/slashCommand';
 
-slashCommands.add(
-	'unarchive',
-	undefined,
-	{
+slashCommands.add({
+	command: 'unarchive',
+	options: {
 		description: 'Unarchive',
 		params: '#channel',
 		permission: 'unarchive-room',
 	},
-	undefined,
-	false,
-	undefined,
-	undefined,
-);
+	providesPreview: false,
+});

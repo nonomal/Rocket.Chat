@@ -1,14 +1,16 @@
-import { Box, Tag } from '@rocket.chat/fuselage';
-import React, { ComponentProps, FC } from 'react';
+import { FeaturePreview, FeaturePreviewOff, FeaturePreviewOn, HeaderV2Tag, HeaderTag as HeaderTagComponent } from '@rocket.chat/ui-client';
+import type { ComponentProps } from 'react';
+import { memo } from 'react';
 
-const HeaderTag: FC<ComponentProps<typeof Tag>> = ({ children, ...props }) => (
-	<Box display='flex' minWidth='65px' mi='x4'>
-		<Tag {...props}>
-			<Box alignItems='center' fontScale='c2' display='flex' minWidth={0}>
-				{children}
-			</Box>
-		</Tag>
-	</Box>
+const HeaderTag = (props: ComponentProps<typeof HeaderTagComponent>) => (
+	<FeaturePreview feature='newNavigation'>
+		<FeaturePreviewOff>
+			<HeaderTagComponent {...props} />
+		</FeaturePreviewOff>
+		<FeaturePreviewOn>
+			<HeaderV2Tag {...props} />
+		</FeaturePreviewOn>
+	</FeaturePreview>
 );
 
-export default HeaderTag;
+export default memo(HeaderTag);

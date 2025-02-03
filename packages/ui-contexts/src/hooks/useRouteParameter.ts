@@ -1,10 +1,13 @@
-import { useContext, useMemo } from 'react';
-import { useSubscription } from 'use-subscription';
+import { useCallback, useContext, useSyncExternalStore } from 'react';
 
 import { RouterContext } from '../RouterContext';
 
 export const useRouteParameter = (name: string): string | undefined => {
-	const { queryRouteParameter } = useContext(RouterContext);
+	const router = useContext(RouterContext);
 
-	return useSubscription(useMemo(() => queryRouteParameter(name), [queryRouteParameter, name]));
+	const getSnapshot = useCallback(() => {
+		return router.getRouteParameters()[name];
+	}, [router, name]);
+
+	return useSyncExternalStore(router.subscribeToRouteChange, getSnapshot);
 };

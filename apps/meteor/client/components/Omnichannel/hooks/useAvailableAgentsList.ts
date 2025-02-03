@@ -21,16 +21,15 @@ export const useAvailableAgentsList = (
 } => {
 	const [itemsList, setItemsList] = useState(() => new RecordList<ILivechatAgent>());
 	const reload = useCallback(() => setItemsList(new RecordList<ILivechatAgent>()), []);
-	const endpoint = 'omnichannel/agents/available';
 
-	const getAgents = useEndpoint('GET', endpoint);
+	const getAgents = useEndpoint('GET', '/v1/omnichannel/agents/available');
 
 	useComponentDidUpdate(() => {
 		options && reload();
 	}, [options, reload]);
 
 	const fetchData = useCallback(
-		async (start, end) => {
+		async (start: number, end: number) => {
 			const { agents, total } = await getAgents({
 				...(options.text && { text: options.text }),
 				...(options.includeExtension && { includeExtension: options.includeExtension }),

@@ -1,18 +1,18 @@
-import type { ISetting, ISubscription } from '@rocket.chat/core-typings';
+import type { ISetting } from '@rocket.chat/core-typings';
+import type { SubscriptionWithRoom } from '@rocket.chat/ui-contexts';
 import { UserContext, SettingsContext } from '@rocket.chat/ui-contexts';
-import { Meta, Story } from '@storybook/react';
+import type { Meta, StoryFn } from '@storybook/react';
 import type { ObjectId } from 'mongodb';
-import React, { ContextType } from 'react';
+import type { ContextType } from 'react';
 
-import RoomList from './RoomList/index';
-import Header from './header';
+import Sidebar from './SidebarRegion';
 
 export default {
 	title: 'Sidebar',
-} as Meta;
+	component: Sidebar,
+} satisfies Meta<typeof Sidebar>;
 
 const settings: Record<string, ISetting> = {
-	// eslint-disable-next-line @typescript-eslint/camelcase
 	UI_Use_Real_Name: {
 		_id: 'UI_Use_Real_Name',
 		blocked: false,
@@ -25,20 +25,15 @@ const settings: Record<string, ISetting> = {
 		type: 'boolean',
 		value: true,
 		public: true,
+		_updatedAt: new Date(),
 	},
 };
 
 const settingContextValue: ContextType<typeof SettingsContext> = {
 	hasPrivateAccess: true,
 	isLoading: false,
-	querySetting: (_id) => ({
-		getCurrentValue: () => settings[_id],
-		subscribe: () => () => undefined,
-	}),
-	querySettings: () => ({
-		getCurrentValue: () => [],
-		subscribe: () => () => undefined,
-	}),
+	querySetting: (_id) => [() => () => undefined, () => settings[_id]],
+	querySettings: () => [() => () => undefined, () => []],
 	dispatch: async () => undefined,
 };
 
@@ -51,7 +46,7 @@ const userPreferences: Record<string, unknown> = {
 	sidebarSortby: 'activity',
 };
 
-const subscriptions: ISubscription[] = [
+const subscriptions: SubscriptionWithRoom[] = [
 	{
 		_id: '3Bysd8GrmkWBdS9RT',
 		open: true,
@@ -72,6 +67,14 @@ const subscriptions: ISubscription[] = [
 		ls: new Date(),
 		lr: new Date(),
 		tunread: [],
+		lowerCaseName: 'general',
+		lowerCaseFName: 'general',
+		estimatedWaitingTimeQueue: 0,
+		livechatData: undefined,
+		priorityWeight: 3,
+		responseBy: undefined,
+		usersCount: 0,
+		waitingResponse: undefined,
 	},
 ];
 
@@ -87,35 +90,19 @@ const userContextValue: ContextType<typeof UserContext> = {
 		roles: ['admin'],
 		type: 'user',
 	},
-	queryPreference: <T,>(pref: string | ObjectId, defaultValue: T) => ({
-		getCurrentValue: () => (typeof pref === 'string' ? (userPreferences[pref] as T) : defaultValue),
-		subscribe: () => () => undefined,
-	}),
-	querySubscriptions: () => ({
-		getCurrentValue: () => subscriptions,
-		subscribe: () => () => undefined,
-	}),
-	querySubscription: () => ({
-		getCurrentValue: () => undefined,
-		subscribe: () => () => undefined,
-	}),
-	loginWithPassword: () => Promise.resolve(undefined),
-	logout: () => Promise.resolve(undefined),
-	queryRoom: () => ({
-		getCurrentValue: () => undefined,
-		subscribe: () => () => undefined,
-	}),
+	queryPreference: <T,>(pref: string | ObjectId, defaultValue: T) => [
+		() => () => undefined,
+		() => (typeof pref === 'string' ? (userPreferences[pref] as T) : defaultValue),
+	],
+	querySubscriptions: () => [() => () => undefined, () => subscriptions],
+	querySubscription: () => [() => () => undefined, () => undefined],
+	queryRoom: () => [() => () => undefined, () => undefined],
+
+	logout: () => Promise.resolve(),
 };
 
-export const Sidebar: Story = () => (
-	<aside className='sidebar sidebar--main' role='navigation'>
-		<Header />
-		<div className='rooms-list sidebar--custom-colors' aria-label='Channels' role='region'>
-			<RoomList />
-		</div>
-	</aside>
-);
-Sidebar.decorators = [
+export const SidebarStory: StoryFn<typeof Sidebar> = () => <Sidebar />;
+SidebarStory.decorators = [
 	(fn) => (
 		<SettingsContext.Provider value={settingContextValue}>
 			<UserContext.Provider value={userContextValue}>{fn()}</UserContext.Provider>

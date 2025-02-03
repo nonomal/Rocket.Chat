@@ -1,7 +1,10 @@
 import { Box } from '@rocket.chat/fuselage';
+import { isExternal, getBaseURI } from '@rocket.chat/ui-client';
 import dompurify from 'dompurify';
-import marked from 'marked';
-import React, { ComponentProps, FC, useMemo } from 'react';
+import { marked } from 'marked';
+import type { ComponentProps } from 'react';
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { renderMessageEmoji } from '../lib/utils/renderMessageEmoji';
 
@@ -17,14 +20,20 @@ const documentRenderer = new marked.Renderer();
 const inlineRenderer = new marked.Renderer();
 const inlineWithoutBreaks = new marked.Renderer();
 
-marked.InlineLexer.rules.gfm = {
-	...marked.InlineLexer.rules.gfm,
-	strong: /^\*\*(?=\S)([\s\S]*?\S)\*\*(?!\*)|^\*(?=\S)([\s\S]*?\S)\*(?!\*)/,
-	em: /^__(?=\S)([\s\S]*?\S)__(?!_)|^_(?=\S)([\s\S]*?\S)_(?!_)/,
+const walkTokens = (token: marked.Token) => {
+	const boldPattern = /^\*[^*]+\*$|^\*\*[^*]+\*\*$/;
+	const italicPattern = /^__(?=\S)([\s\S]*?\S)__(?!_)|^_(?=\S)([\s\S]*?\S)_(?!_)/;
+	if (boldPattern.test(token.raw) && token.type === 'em') {
+		token.type = 'strong' as 'em';
+	} else if (italicPattern.test(token.raw) && token.type === 'strong') {
+		token.type = 'em' as 'strong';
+	}
 };
 
+marked.use({ walkTokens });
+
 const linkMarked = (href: string | null, _title: string | null, text: string): string =>
-	`<a href="${href}" target="_blank" rel="nofollow">${text}</a> `;
+	`<a href="${href}" rel="nofollow noopener noreferrer">${text}</a> `;
 const paragraphMarked = (text: string): string => text;
 const brMarked = (): string => ' ';
 const listItemMarked = (text: string): string => {
@@ -44,6 +53,9 @@ inlineRenderer.hr = horizontalRuleMarked;
 inlineWithoutBreaks.link = linkMarked;
 inlineWithoutBreaks.paragraph = paragraphMarked;
 inlineWithoutBreaks.br = brMarked;
+inlineWithoutBreaks.image = brMarked;
+inlineWithoutBreaks.code = paragraphMarked;
+inlineWithoutBreaks.codespan = paragraphMarked;
 inlineWithoutBreaks.listitem = listItemMarked;
 inlineWithoutBreaks.hr = horizontalRuleMarked;
 
@@ -67,17 +79,26 @@ const inlineWithoutBreaksOptions = {
 	renderer: inlineWithoutBreaks,
 };
 
-const MarkdownText: FC<Partial<MarkdownTextParams>> = ({
+const getRegexp = (schemeSetting: string): RegExp => {
+	const schemes = schemeSetting ? schemeSetting.split(',').join('|') : '';
+	return new RegExp(`^(${schemes}):`, 'gim');
+};
+
+type MarkdownTextProps = Partial<MarkdownTextParams>;
+
+const MarkdownText = ({
 	content,
 	variant = 'document',
 	withTruncatedText = false,
 	preserveHtml = false,
 	parseEmoji = false,
 	...props
-}) => {
+}: MarkdownTextProps) => {
 	const sanitizer = dompurify.sanitize;
+	const { t } = useTranslation();
+	let markedOptions: marked.MarkedOptions;
 
-	let markedOptions: {};
+	const schemes = 'http,https,notes,ftp,ftps,tel,mailto,sms,cid';
 
 	switch (variant) {
 		case 'inline':
@@ -94,21 +115,37 @@ const MarkdownText: FC<Partial<MarkdownTextParams>> = ({
 	const __html = useMemo(() => {
 		const html = ((): any => {
 			if (content && typeof content === 'string') {
-				const markedHtml = marked(new Option(content).innerHTML, markedOptions);
+				const markedHtml = /inline/.test(variant)
+					? marked.parseInline(new Option(content).innerHTML, markedOptions)
+					: marked.parse(new Option(content).innerHTML, markedOptions);
 
 				if (parseEmoji) {
 					// We are using the old emoji parser here. This could come
 					// with additional processing use, but is the workaround available right now.
 					// Should be replaced in the future with the new parser.
-					return renderMessageEmoji({ html: markedHtml });
+					return renderMessageEmoji(markedHtml);
 				}
 
 				return markedHtml;
 			}
 		})();
 
-		return preserveHtml ? html : html && sanitizer(html, { ADD_ATTR: ['target'] });
-	}, [content, preserveHtml, sanitizer, markedOptions, parseEmoji]);
+		// Add a hook to make all external links open a new window
+		dompurify.addHook('afterSanitizeAttributes', (node) => {
+			if (isElement(node) && 'target' in node) {
+				const href = node.getAttribute('href') || '';
+
+				node.setAttribute('title', `${t('Go_to_href', { href: href.replace(getBaseURI(), '') })}`);
+				node.setAttribute('rel', 'nofollow noopener noreferrer');
+				if (isExternal(node.getAttribute('href') || '')) {
+					node.setAttribute('target', '_blank');
+					node.setAttribute('title', href);
+				}
+			}
+		});
+
+		return preserveHtml ? html : html && sanitizer(html, { ADD_ATTR: ['target'], ALLOWED_URI_REGEXP: getRegexp(schemes) });
+	}, [preserveHtml, sanitizer, content, variant, markedOptions, parseEmoji, t]);
 
 	return __html ? (
 		<Box
@@ -119,5 +156,7 @@ const MarkdownText: FC<Partial<MarkdownTextParams>> = ({
 		/>
 	) : null;
 };
+
+const isElement = (node: Node): node is Element => node.nodeType === Node.ELEMENT_NODE;
 
 export default MarkdownText;

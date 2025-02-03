@@ -1,3 +1,4 @@
+import type { ICallDetails } from './ICallDetails';
 import type { ICallerInfo } from './ICallerInfo';
 
 export type VoipEvents = {
@@ -7,8 +8,10 @@ export type VoipEvents = {
 	unregistrationerror: unknown;
 	connected: undefined;
 	connectionerror: unknown;
-	callestablished: undefined;
+	callestablished: ICallDetails;
 	incomingcall: ICallerInfo;
+	callfailed: string;
+	ringing: ICallDetails;
 	callterminated: undefined;
 	hold: undefined;
 	holderror: undefined;

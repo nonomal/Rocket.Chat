@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 
 import Bridge from './irc-bridge';
-import { settings } from '../../settings';
+import { settings } from '../../settings/server';
 
 if (!!settings.get('IRC_Enabled') === true) {
 	// Normalize the config values
@@ -21,7 +21,7 @@ if (!!settings.get('IRC_Enabled') === true) {
 
 	Meteor.ircBridge = new Bridge(config);
 
-	Meteor.startup(() => {
-		Meteor.ircBridge.init();
+	Meteor.startup(async () => {
+		await Meteor.ircBridge.init();
 	});
 }

@@ -1,15 +1,15 @@
+import { isOmnichannelRoom } from '@rocket.chat/core-typings';
+import type { IUser, IRoom } from '@rocket.chat/core-typings';
+import { Users } from '@rocket.chat/models';
 import { Meteor } from 'meteor/meteor';
-import { isOmnichannelRoom, IRoom } from '@rocket.chat/core-typings';
-import type { IUser } from '@rocket.chat/core-typings';
 
-import { callbacks } from '../../../../../lib/callbacks';
-import { Users } from '../../../../../app/models/server/raw';
 import { settings } from '../../../../../app/settings/server';
+import { callbacks } from '../../../../../lib/callbacks';
 import { getMaxNumberSimultaneousChat } from '../lib/Helper';
 
 callbacks.add(
 	'beforeJoinRoom',
-	(user: IUser, room?: IRoom): IUser => {
+	async (user: IUser, room?: IRoom): Promise<IUser> => {
 		if (!settings.get('Livechat_waiting_queue')) {
 			return user;
 		}
@@ -19,7 +19,7 @@ callbacks.add(
 		}
 
 		const { departmentId } = room;
-		const maxNumberSimultaneousChat = getMaxNumberSimultaneousChat({
+		const maxNumberSimultaneousChat = await getMaxNumberSimultaneousChat({
 			agentId: user._id,
 			departmentId,
 		});
@@ -28,7 +28,7 @@ callbacks.add(
 			return user;
 		}
 
-		const userSubs = Promise.await(Users.getAgentAndAmountOngoingChats(user._id));
+		const userSubs = await Users.getAgentAndAmountOngoingChats(user._id);
 		if (!userSubs) {
 			return user;
 		}

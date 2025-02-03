@@ -1,6 +1,6 @@
-import React, { ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
-import InfoPanel from '../../../../InfoPanel';
+import { InfoPanelField, InfoPanelLabel, InfoPanelText } from '../../../../../components/InfoPanel';
 
 type InfoFieldPropsType = {
 	label: string;
@@ -8,8 +8,8 @@ type InfoFieldPropsType = {
 };
 
 export const InfoField = ({ label, info }: InfoFieldPropsType): ReactElement => (
-	<InfoPanel.Field>
-		<InfoPanel.Label>{label}</InfoPanel.Label>
-		<InfoPanel.Text>{info}</InfoPanel.Text>
-	</InfoPanel.Field>
+	<InfoPanelField>
+		<InfoPanelLabel>{label}</InfoPanelLabel>
+		<InfoPanelText>{info}</InfoPanelText>
+	</InfoPanelField>
 );

@@ -1,43 +1,40 @@
-import { IRoom, isDirectMessageRoom, isOmnichannelRoom } from '@rocket.chat/core-typings';
+import type { IRoom } from '@rocket.chat/core-typings';
+import { isOmnichannelRoom } from '@rocket.chat/core-typings';
 import { Icon } from '@rocket.chat/fuselage';
-import React, { ComponentProps, FC } from 'react';
+import type { ComponentProps, ReactElement } from 'react';
+import { isValidElement } from 'react';
 
-import { ReactiveUserStatus } from '../UserStatus';
 import { OmnichannelRoomIcon } from './OmnichannelRoomIcon';
+import { useRoomIcon } from '../../hooks/useRoomIcon';
 
-export const RoomIcon: FC<{
-	room: IRoom;
-	size: ComponentProps<typeof Icon>['size'];
-	highlighted?: boolean;
-	placement: 'sidebar' | 'default';
-}> = ({ room, size = 'x16', placement }) => {
-	if (room.prid) {
-		return <Icon name='baloons' size={size} />;
-	}
+export const RoomIcon = ({
+	room,
+	size = 'x16',
+	isIncomingCall,
+	placement = 'default',
+}: {
+	room: Pick<IRoom, 't' | 'prid' | 'teamMain' | 'uids' | 'u'>;
+	size?: ComponentProps<typeof Icon>['size'];
+	isIncomingCall?: boolean;
+	placement?: 'sidebar' | 'default';
+}): ReactElement | null => {
+	const iconPropsOrReactNode = useRoomIcon(room);
 
-	if (room.teamMain) {
-		return <Icon name={room.t === 'p' ? 'team-lock' : 'team'} size={size} />;
+	if (isIncomingCall) {
+		return <Icon name='phone' size={size} />;
 	}
 
 	if (isOmnichannelRoom(room)) {
-		return <OmnichannelRoomIcon placement={placement} room={room} size={size} />;
-	}
-	if (isDirectMessageRoom(room)) {
-		if (room.uids && room.uids.length > 2) {
-			return <Icon name='balloon' size={size} />;
-		}
-		if (room.uids && room.uids.length > 0) {
-			return <ReactiveUserStatus uid={room.uids.filter((uid) => uid !== room.u._id)[0] || room.u._id} />;
-		}
-		return <Icon name='at' size={size} />;
+		return <OmnichannelRoomIcon placement={placement} source={room.source} status={room.v?.status} size={size} />;
 	}
 
-	switch (room.t) {
-		case 'p':
-			return <Icon name='hashtag-lock' size={size} />;
-		case 'c':
-			return <Icon name='hash' size={size} />;
-		default:
-			return null;
+	if (isValidElement<any>(iconPropsOrReactNode)) {
+		return iconPropsOrReactNode;
 	}
+
+	if (!iconPropsOrReactNode) {
+		return null;
+	}
+
+	return <Icon {...iconPropsOrReactNode} size={size} />;
 };
