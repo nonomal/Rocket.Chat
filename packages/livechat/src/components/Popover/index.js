@@ -1,26 +1,21 @@
 import { Component, createContext } from 'preact';
 
-import { createClassName, normalizeDOMRect } from '../helpers';
+import { createClassName } from '../../helpers/createClassName';
+import { normalizeDOMRect } from '../../helpers/normalizeDOMRect';
 import styles from './styles.scss';
-
 
 const PopoverContext = createContext();
 
-
 const PopoverOverlay = ({ children, className, visible, ...props }) => (
-	<div
-		className={createClassName(styles, 'popover__overlay', { visible }, [className])}
-		{...props}
-	>
+	<div className={createClassName(styles, 'popover__overlay', { visible }, [className])} {...props}>
 		{children}
 	</div>
 );
 
-
 export class PopoverContainer extends Component {
 	state = {
 		renderer: null,
-	}
+	};
 
 	open = (renderer, props, { currentTarget } = {}) => {
 		let overlayBounds;
@@ -35,11 +30,11 @@ export class PopoverContainer extends Component {
 		}
 
 		this.setState({ renderer, ...props, overlayBounds, triggerBounds });
-	}
+	};
 
 	dismiss = () => {
 		this.setState({ renderer: null, overlayBounds: null, triggerBounds: null });
-	}
+	};
 
 	handleOverlayGesture = ({ currentTarget, target }) => {
 		if (currentTarget !== target) {
@@ -47,7 +42,7 @@ export class PopoverContainer extends Component {
 		}
 
 		this.dismiss();
-	}
+	};
 
 	handleKeyDown = ({ key }) => {
 		if (key !== 'Escape') {
@@ -55,11 +50,11 @@ export class PopoverContainer extends Component {
 		}
 
 		this.dismiss();
-	}
+	};
 
 	handleOverlayRef = (ref) => {
 		this.overlayRef = ref;
-	}
+	};
 
 	componentDidMount() {
 		this.mounted = true;
@@ -86,12 +81,10 @@ export class PopoverContainer extends Component {
 				</PopoverOverlay>
 			</div>
 		</PopoverContext.Provider>
-	)
+	);
 }
 
-
+/** @type {function({ children: [function({ pop: function() }), function({ dismiss: any, triggerBounds?: any, overlayBounds?: any })], overlayProps?: any }): any} */
 export const PopoverTrigger = ({ children, ...props }) => (
-	<PopoverContext.Consumer>
-		{({ open }) => children[0]({ pop: open.bind(null, children[1], props) })}
-	</PopoverContext.Consumer>
+	<PopoverContext.Consumer>{({ open }) => children[0]({ pop: open.bind(null, children[1], props) })}</PopoverContext.Consumer>
 );

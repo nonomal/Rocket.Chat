@@ -1,27 +1,23 @@
-import { Meteor } from 'meteor/meteor';
-import s from 'underscore.string';
+import type { SlashCommandCallbackParams } from '@rocket.chat/core-typings';
 
-import { slashCommands } from '../../utils/lib/slashCommand';
+import { executeSendMessage } from '../../lib/server/methods/sendMessage';
+import { slashCommands } from '../../utils/server/slashCommand';
 
 /*
  * Me is a named function that will replace /me commands
  * @param {Object} message - The message object
  */
-slashCommands.add(
-	'me',
-	function Me(_command: 'me', params: string, item: Record<string, string>): void {
-		if (s.trim(params)) {
-			const msg = item;
+slashCommands.add({
+	command: 'me',
+	callback: async function Me({ params, message, userId }: SlashCommandCallbackParams<'me'>): Promise<void> {
+		if (params.trim()) {
+			const msg = message;
 			msg.msg = `_${params}_`;
-			Meteor.call('sendMessage', msg);
+			await executeSendMessage(userId, msg);
 		}
 	},
-	{
+	options: {
 		description: 'Displays_action_text',
 		params: 'your_message',
 	},
-	undefined,
-	false,
-	undefined,
-	undefined,
-);
+});

@@ -1,30 +1,26 @@
 import type { IRoom } from '@rocket.chat/core-typings';
-import React, { ReactElement, useMemo } from 'react';
+import type { ReactElement } from 'react';
 
-import Header from '../../../components/Header';
-import { AsyncStatePhase } from '../../../hooks/useAsyncState';
-import { useEndpointData } from '../../../hooks/useEndpointData';
 import ParentRoom from './ParentRoom';
+import { HeaderTagSkeleton } from '../../../components/Header';
+import { useRoomInfoEndpoint } from '../../../hooks/useRoomInfoEndpoint';
 
 type ParentRoomWithEndpointDataProps = {
 	rid: IRoom['_id'];
 };
 
 const ParentRoomWithEndpointData = ({ rid }: ParentRoomWithEndpointDataProps): ReactElement | null => {
-	const { phase, value } = useEndpointData(
-		'rooms.info',
-		useMemo(() => ({ roomId: rid }), [rid]),
-	);
+	const { data, isPending, isError } = useRoomInfoEndpoint(rid);
 
-	if (AsyncStatePhase.LOADING === phase) {
-		return <Header.Tag.Skeleton />;
+	if (isPending) {
+		return <HeaderTagSkeleton />;
 	}
 
-	if (AsyncStatePhase.REJECTED === phase || !value?.room) {
+	if (isError || !data?.room) {
 		return null;
 	}
 
-	return <ParentRoom room={value.room} />;
+	return <ParentRoom room={data.room} />;
 };
 
 export default ParentRoomWithEndpointData;

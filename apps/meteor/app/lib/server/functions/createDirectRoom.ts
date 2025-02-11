@@ -1,18 +1,26 @@
+import { AppEvents, Apps } from '@rocket.chat/apps';
 import { AppsEngineException } from '@rocket.chat/apps-engine/definition/exceptions';
+import type { ISubscriptionExtraData } from '@rocket.chat/core-services';
+import type { ICreatedRoom, IRoom, ISubscription, IUser } from '@rocket.chat/core-typings';
+import { Rooms, Subscriptions, Users } from '@rocket.chat/models';
+import { Random } from '@rocket.chat/random';
 import { Meteor } from 'meteor/meteor';
-import { Random } from 'meteor/random';
-import type { IUser } from '@rocket.chat/core-typings';
+import type { MatchKeysAndValues } from 'mongodb';
 
-import { Apps } from '../../../apps/server';
 import { callbacks } from '../../../../lib/callbacks';
-import { Rooms } from '../../../models/server';
+import { isTruthy } from '../../../../lib/isTruthy';
 import { settings } from '../../../settings/server';
-import { getDefaultSubscriptionPref } from '../../../utils/server';
-import { Users, Subscriptions } from '../../../models/server/raw';
-import { ICreateRoomParams } from '../../../../server/sdk/types/IRoomService';
+import { getDefaultSubscriptionPref } from '../../../utils/lib/getDefaultSubscriptionPref';
+import { notifyOnRoomChangedById, notifyOnSubscriptionChangedByRoomIdAndUserId } from '../lib/notifyListener';
 
-const generateSubscription = (fname: string, name: string, user: IUser, extra: {}): any => ({
+const generateSubscription = (
+	fname: string,
+	name: string,
+	user: IUser,
+	extra: MatchKeysAndValues<ISubscription>,
+): MatchKeysAndValues<ISubscription> => ({
 	_id: Random.id(),
+	ts: new Date(),
 	alert: false,
 	unread: 0,
 	userMentions: 0,
@@ -32,22 +40,50 @@ const generateSubscription = (fname: string, name: string, user: IUser, extra: {
 const getFname = (members: IUser[]): string => members.map(({ name, username }) => name || username).join(', ');
 const getName = (members: IUser[]): string => members.map(({ username }) => username).join(', ');
 
-export const createDirectRoom = function (members: IUser[], roomExtraData = {}, options: ICreateRoomParams['options']): unknown {
-	if (members.length > (settings.get('DirectMesssage_maxUsers') || 1)) {
-		throw new Error('error-direct-message-max-user-exceeded');
+export async function createDirectRoom(
+	members: IUser[] | string[],
+	roomExtraData = {},
+	options: {
+		creator?: string;
+		subscriptionExtra?: ISubscriptionExtraData;
+	},
+): Promise<ICreatedRoom> {
+	const maxUsers = settings.get<number>('DirectMesssage_maxUsers') || 1;
+	if (members.length > maxUsers) {
+		throw new Meteor.Error(
+			'error-direct-message-max-user-exceeded',
+			`You cannot add more than ${maxUsers} users, including yourself to a direct message`,
+			{
+				method: 'createDirectRoom',
+			},
+		);
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-	const sortedMembers = members.sort((u1, u2) => (u1.name! || u1.username!).localeCompare(u2.name! || u2.username!));
+	await callbacks.run('beforeCreateDirectRoom', members);
 
-	const usernames = sortedMembers.map(({ username }) => username);
-	const uids = members.map(({ _id }) => _id).sort();
+	const membersUsernames: string[] = members
+		.map((member) => {
+			if (typeof member === 'string') {
+				return member.replace('@', '');
+			}
+			return member.username;
+		})
+		.filter(isTruthy);
+
+	const roomMembers: IUser[] = await Users.findUsersByUsernames(membersUsernames, {
+		projection: { _id: 1, name: 1, username: 1, settings: 1, customFields: 1 },
+	}).toArray();
+	// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+	const sortedMembers = roomMembers.sort((u1, u2) => (u1.name! || u1.username!).localeCompare(u2.name! || u2.username!));
+
+	const usernames: string[] = sortedMembers.map(({ username }) => username as string).filter(Boolean);
+	const uids = roomMembers.map(({ _id }) => _id).sort();
 
 	// Deprecated: using users' _id to compose the room _id is deprecated
-	const room =
+	const room: IRoom | null =
 		uids.length === 2
-			? Rooms.findOneById(uids.join(''), { fields: { _id: 1 } })
-			: Rooms.findOneDirectRoomContainingAllUserIDs(uids, { fields: { _id: 1 } });
+			? await Rooms.findOneById(uids.join(''), { projection: { _id: 1 } })
+			: await Rooms.findOneDirectRoomContainingAllUserIDs(uids, { projection: { _id: 1 } });
 
 	const isNewRoom = !room;
 
@@ -63,55 +99,66 @@ export const createDirectRoom = function (members: IUser[], roomExtraData = {}, 
 	};
 
 	if (isNewRoom) {
-		const tmpRoom = {
+		const tmpRoom: { _USERNAMES?: (string | undefined)[] } & typeof roomInfo = {
 			...roomInfo,
 			_USERNAMES: usernames,
 		};
 
-		const prevent = Promise.await(
-			Apps.triggerEvent('IPreRoomCreatePrevent', tmpRoom).catch((error) => {
-				if (error instanceof AppsEngineException) {
-					throw new Meteor.Error('error-app-prevented', error.message);
-				}
+		const prevent = await Apps.self?.triggerEvent(AppEvents.IPreRoomCreatePrevent, tmpRoom).catch((error) => {
+			if (error.name === AppsEngineException.name) {
+				throw new Meteor.Error('error-app-prevented', error.message);
+			}
 
-				throw error;
-			}),
-		);
+			throw error;
+		});
+
 		if (prevent) {
 			throw new Meteor.Error('error-app-prevented', 'A Rocket.Chat App prevented the room creation.');
 		}
 
-		const result = Promise.await(
-			Apps.triggerEvent('IPreRoomCreateModify', Promise.await(Apps.triggerEvent('IPreRoomCreateExtend', tmpRoom))),
+		const result = await Apps.self?.triggerEvent(
+			AppEvents.IPreRoomCreateModify,
+			await Apps.self?.triggerEvent(AppEvents.IPreRoomCreateExtend, tmpRoom),
 		);
 
 		if (typeof result === 'object') {
 			Object.assign(roomInfo, result);
 		}
+
+		delete tmpRoom._USERNAMES;
 	}
 
-	const rid = room?._id || Rooms.insert(roomInfo);
+	// @ts-expect-error - TODO: room expects `u` to be passed, but it's not part of the original object in here
+	const rid = room?._id || (await Rooms.insertOne(roomInfo)).insertedId;
 
-	if (members.length === 1) {
+	void notifyOnRoomChangedById(rid, isNewRoom ? 'inserted' : 'updated');
+
+	if (roomMembers.length === 1) {
 		// dm to yourself
-		Subscriptions.updateOne(
-			{ rid, 'u._id': members[0]._id },
+		const { modifiedCount, upsertedCount } = await Subscriptions.updateOne(
+			{ rid, 'u._id': roomMembers[0]._id },
 			{
 				$set: { open: true },
 				// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-				$setOnInsert: generateSubscription(members[0].name! || members[0].username!, members[0].username!, members[0], {
+				$setOnInsert: generateSubscription(roomMembers[0].name! || roomMembers[0].username!, roomMembers[0].username!, roomMembers[0], {
 					...options?.subscriptionExtra,
 				}),
 			},
 			{ upsert: true },
 		);
+		if (modifiedCount || upsertedCount) {
+			void notifyOnSubscriptionChangedByRoomIdAndUserId(rid, roomMembers[0]._id, modifiedCount ? 'updated' : 'inserted');
+		}
 	} else {
-		const memberIds = members.map((member) => member._id);
-		const membersWithPreferences = Users.find({ _id: { $in: memberIds } }, { projection: { 'username': 1, 'settings.preferences': 1 } });
+		const memberIds = roomMembers.map((member) => member._id);
+		const membersWithPreferences: IUser[] = await Users.find(
+			{ _id: { $in: memberIds } },
+			{ projection: { 'username': 1, 'settings.preferences': 1 } },
+		).toArray();
 
-		membersWithPreferences.forEach((member) => {
+		for await (const member of membersWithPreferences) {
 			const otherMembers = sortedMembers.filter(({ _id }) => _id !== member._id);
-			Subscriptions.updateOne(
+			const { modifiedCount, upsertedCount } = await Subscriptions.updateOne(
 				{ rid, 'u._id': member._id },
 				{
 					...(options?.creator === member._id && { $set: { open: true } }),
@@ -122,22 +169,28 @@ export const createDirectRoom = function (members: IUser[], roomExtraData = {}, 
 				},
 				{ upsert: true },
 			);
-		});
+			if (modifiedCount || upsertedCount) {
+				void notifyOnSubscriptionChangedByRoomIdAndUserId(rid, member._id, modifiedCount ? 'updated' : 'inserted');
+			}
+		}
 	}
 
 	// If the room is new, run a callback
 	if (isNewRoom) {
-		const insertedRoom = Rooms.findOneById(rid);
+		const insertedRoom = await Rooms.findOneById(rid);
 
-		callbacks.run('afterCreateDirectRoom', insertedRoom, { members });
+		await callbacks.run('afterCreateDirectRoom', insertedRoom, { members: roomMembers, creatorId: options?.creator });
 
-		Apps.triggerEvent('IPostRoomCreate', insertedRoom);
+		void Apps.self?.triggerEvent(AppEvents.IPostRoomCreate, insertedRoom);
 	}
 
 	return {
-		_id: rid,
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+		...room!,
+		_id: String(rid),
 		usernames,
 		t: 'd',
+		rid,
 		inserted: isNewRoom,
 	};
-};
+}

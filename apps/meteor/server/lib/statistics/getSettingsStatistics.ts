@@ -1,6 +1,6 @@
 import type { ISettingStatistics, ISettingStatisticsObject } from '@rocket.chat/core-typings';
 
-import { Settings } from '../../../app/models/server/raw';
+import { settings } from '../../../app/settings/server';
 
 const setSettingsStatistics = async (settings: ISettingStatistics): Promise<ISettingStatisticsObject> => {
 	const {
@@ -29,8 +29,6 @@ const setSettingsStatistics = async (settings: ISettingStatistics): Promise<ISet
 		otrEnable,
 		pushEnable,
 		threadsEnabled,
-		bigBlueButton,
-		jitsiEnabled,
 		webRTCEnableChannel,
 		webRTCEnablePrivate,
 		webRTCEnableDirect,
@@ -97,10 +95,6 @@ const setSettingsStatistics = async (settings: ISettingStatistics): Promise<ISet
 		threads: {
 			threadsEnabled,
 		},
-		videoConference: {
-			bigBlueButton,
-			jitsiEnabled,
-		},
 		webRTC: {
 			webRTCEnableChannel,
 			webRTCEnablePrivate,
@@ -120,8 +114,6 @@ export const getSettingsStatistics = async (): Promise<ISettingStatisticsObject>
 			{ key: 'SMTP_Port', alias: 'smtpPort' },
 			{ key: 'From_Email', alias: 'fromEmail' },
 			{ key: 'FileUpload_Enabled', alias: 'fileUploadEnable' },
-			{ key: 'Apps_Framework_Development_Mode', alias: 'frameworkDevMode' },
-			{ key: 'Apps_Framework_enabled', alias: 'frameworkEnable' },
 			{ key: 'NPS_survey_enabled', alias: 'surveyEnabled' },
 			{ key: 'Update_EnableChecker', alias: 'updateChecker' },
 			{ key: 'Livestream_enabled', alias: 'liveStream' },
@@ -136,28 +128,20 @@ export const getSettingsStatistics = async (): Promise<ISettingStatisticsObject>
 			{ key: 'OTR_Enable', alias: 'otrEnable' },
 			{ key: 'Push_enable', alias: 'pushEnable' },
 			{ key: 'Threads_enabled', alias: 'threadsEnabled' },
-			{ key: 'bigbluebutton_Enabled', alias: 'bigBlueButton' },
-			{ key: 'Jitsi_Enabled', alias: 'jitsiEnabled' },
 			{ key: 'WebRTC_Enable_Channel', alias: 'webRTCEnableChannel' },
 			{ key: 'WebRTC_Enable_Private', alias: 'webRTCEnablePrivate' },
 			{ key: 'WebRTC_Enable_Direct', alias: 'webRTCEnableDirect' },
 			{ key: 'Canned_Responses_Enable', alias: 'cannedResponsesEnabled' },
-		];
+		] as const;
 
-		// Mapping only _id values
-		const settingsIDs = settingsBase.map((el) => el.key);
+		const settingsStatistics = settingsBase.reduce<ISettingStatistics>((acc, { key, alias }) => {
+			if (!settings.has(key)) return acc;
 
-		const settingsStatistics = (
-			await Settings.findByIds(settingsIDs)
-				.map((el): ISettingStatistics => {
-					const alias = settingsBase.find((obj) => obj.key === el._id)?.alias || {};
+			acc[alias] = settings.get(key);
 
-					if (!!alias && Object.keys(el).length) return { [String(alias)]: el.value };
-					return alias;
-				})
-				.filter((el: ISettingStatistics) => Object.keys(el).length) // Filter to remove all empty objects
-				.toArray()
-		).reduce((a, b) => Object.assign(a, b), {}); // Convert array to objects
+			return acc;
+		}, {});
+
 		const staticticObject = await setSettingsStatistics(settingsStatistics);
 
 		return staticticObject;

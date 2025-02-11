@@ -1,96 +1,136 @@
-import { IRole } from '@rocket.chat/core-typings';
-import { Box, Field, Margins, ButtonGroup, Button, Callout } from '@rocket.chat/fuselage';
-import { useMutableCallback } from '@rocket.chat/fuselage-hooks';
-import { useToastMessageDispatch, useRoute, useEndpoint, useTranslation } from '@rocket.chat/ui-contexts';
-import React, { useState, useRef, ReactElement } from 'react';
+import type { IRole, IRoom } from '@rocket.chat/core-typings';
+import { Box, Field, FieldLabel, FieldRow, Margins, ButtonGroup, Button, Callout, FieldError } from '@rocket.chat/fuselage';
+import { useEffectEvent } from '@rocket.chat/fuselage-hooks';
+import { useToastMessageDispatch, useEndpoint, useTranslation, useRouter } from '@rocket.chat/ui-contexts';
+import { useQueryClient } from '@tanstack/react-query';
+import { useId, type ReactElement } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 
-import Page from '../../../../components/Page';
-import RoomAutoComplete from '../../../../components/RoomAutoComplete';
-import UserAutoComplete from '../../../../components/UserAutoComplete';
 import UsersInRoleTable from './UsersInRoleTable';
+import { Page, PageHeader, PageContent } from '../../../../components/Page';
+import RoomAutoComplete from '../../../../components/RoomAutoComplete';
+import UserAutoCompleteMultiple from '../../../../components/UserAutoCompleteMultiple';
+
+type UsersInRolePayload = {
+	rid?: IRoom['_id'];
+	users: string[];
+};
 
 const UsersInRolePage = ({ role }: { role: IRole }): ReactElement => {
 	const t = useTranslation();
-	const reload = useRef<() => void>(() => undefined);
-	const [user, setUser] = useState<string | undefined>('');
-	const [rid, setRid] = useState<string>();
-	const [userError, setUserError] = useState<string>();
 	const dispatchToastMessage = useToastMessageDispatch();
+	const queryClient = useQueryClient();
+
+	const {
+		control,
+		handleSubmit,
+		formState: { errors, isDirty },
+		watch,
+	} = useForm<UsersInRolePayload>({ defaultValues: { users: [] } });
 
 	const { _id, name, description } = role;
-	const router = useRoute('admin-permissions');
-	const addUser = useEndpoint('POST', 'roles.addUserToRole');
+	const router = useRouter();
+	const addUserToRoleEndpoint = useEndpoint('POST', '/v1/roles.addUserToRole');
 
-	const handleReturn = useMutableCallback(() => {
-		router.push({
-			context: 'edit',
-			_id,
-		});
-	});
+	const { rid } = watch();
+	const roomFieldId = useId();
+	const usersFieldId = useId();
 
-	const handleAdd = useMutableCallback(async () => {
-		if (!user) {
-			return setUserError(t('User_cant_be_empty'));
-		}
-
+	const handleAdd = useEffectEvent(async ({ users, rid }: UsersInRolePayload) => {
 		try {
-			await addUser({ roleId: _id, username: user, roomId: rid });
-			dispatchToastMessage({ type: 'success', message: t('User_added') });
-			setUser(undefined);
-			reload.current?.();
+			await Promise.all(
+				users.map(async (user) => {
+					if (user) {
+						await addUserToRoleEndpoint({ roleName: _id, username: user, roomId: rid });
+					}
+				}),
+			);
+			dispatchToastMessage({ type: 'success', message: t('Users_added') });
+			queryClient.invalidateQueries({
+				queryKey: ['getUsersInRole'],
+			});
 		} catch (error) {
 			dispatchToastMessage({ type: 'error', message: error });
 		}
 	});
 
-	const handleUserChange = useMutableCallback((user) => {
-		if (user !== '') {
-			setUserError(undefined);
-		}
-
-		return setUser(user);
-	});
-
 	return (
 		<Page>
-			<Page.Header title={`${t('Users_in_role')} "${description || name}"`}>
+			<PageHeader title={`${t('Users_in_role')} "${description || name}"`}>
 				<ButtonGroup>
-					<Button onClick={handleReturn}>{t('Back')}</Button>
+					<Button onClick={() => router.navigate(`/admin/permissions/edit/${_id}`)}>{t('Back')}</Button>
 				</ButtonGroup>
-			</Page.Header>
-			<Page.Content>
+			</PageHeader>
+			<PageContent>
 				<Box display='flex' flexDirection='column' w='full' mi='neg-x4'>
-					<Margins inline='x4'>
+					<Margins inline={4}>
 						{role.scope !== 'Users' && (
-							<Field mbe='x4'>
-								<Field.Label>{t('Choose_a_room')}</Field.Label>
-								<Field.Row>
-									<RoomAutoComplete value={rid} onChange={setRid} placeholder={t('User')} />
-								</Field.Row>
+							<Field mbe={4}>
+								<FieldLabel htmlFor={roomFieldId}>{t('Choose_a_room')}</FieldLabel>
+								<FieldRow>
+									<Controller
+										control={control}
+										name='rid'
+										rules={{ required: t('Required_field', { field: t('Room') }) }}
+										render={({ field: { onChange, value } }) => (
+											<RoomAutoComplete
+												id={roomFieldId}
+												aria-required='true'
+												aria-invalid={Boolean(errors.rid)}
+												aria-describedby={`${roomFieldId}-error`}
+												scope='admin'
+												value={value}
+												onChange={onChange}
+												placeholder={t('Room')}
+											/>
+										)}
+									/>
+								</FieldRow>
+								{errors.rid && (
+									<FieldError aria-live='assertive' id={`${roomFieldId}-error`}>
+										{errors.rid.message}
+									</FieldError>
+								)}
 							</Field>
 						)}
 						<Field>
-							<Field.Label>{t('Add_user')}</Field.Label>
-							<Field.Row>
-								<UserAutoComplete value={user} onChange={handleUserChange} placeholder={t('User')} />
-
-								<ButtonGroup mis='x8' align='end'>
-									<Button primary onClick={handleAdd}>
-										{t('Add')}
-									</Button>
-								</ButtonGroup>
-							</Field.Row>
-							<Field.Error>{userError}</Field.Error>
+							<FieldLabel htmlFor={usersFieldId}>{t('Add_users')}</FieldLabel>
+							<FieldRow>
+								<Controller
+									control={control}
+									name='users'
+									rules={{ required: t('Required_field', { field: t('Users') }) }}
+									render={({ field: { onChange, value } }) => (
+										<UserAutoCompleteMultiple
+											id={usersFieldId}
+											aria-required='true'
+											aria-invalid={Boolean(errors.users)}
+											aria-describedby={`${usersFieldId}-error`}
+											value={value}
+											placeholder={t('Users')}
+											onChange={onChange}
+										/>
+									)}
+								/>
+								<Button mis={8} primary onClick={handleSubmit(handleAdd)} disabled={!isDirty}>
+									{t('Add')}
+								</Button>
+							</FieldRow>
+							{errors.users && (
+								<FieldRow>
+									<FieldError aria-live='assertive' id={`${usersFieldId}-error`}>
+										{errors.users.message}
+									</FieldError>
+								</FieldRow>
+							)}
 						</Field>
 					</Margins>
 				</Box>
-				<Margins blockStart='x8'>
-					{(role.scope === 'Users' || rid) && (
-						<UsersInRoleTable reloadRef={reload} rid={rid} roleId={_id} roleName={name} description={description} />
-					)}
+				<Margins blockStart={8}>
+					{(role.scope === 'Users' || rid) && <UsersInRoleTable rid={rid} roleId={_id} roleName={name} description={description} />}
 					{role.scope !== 'Users' && !rid && <Callout type='info'>{t('Select_a_room')}</Callout>}
 				</Margins>
-			</Page.Content>
+			</PageContent>
 		</Page>
 	);
 };

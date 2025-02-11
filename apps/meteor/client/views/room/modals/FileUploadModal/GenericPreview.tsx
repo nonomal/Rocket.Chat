@@ -1,5 +1,5 @@
 import { Box, Icon } from '@rocket.chat/fuselage';
-import React, { ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
 import { formatBytes } from '../../../../lib/utils/formatBytes';
 

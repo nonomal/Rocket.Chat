@@ -1,8 +1,14 @@
 import type { IServerInfo, Serialized } from '@rocket.chat/core-typings';
-import type { Method, PathFor, OperationParams, MatchPathPattern, OperationResult } from '@rocket.chat/rest-typings';
+import type {
+	ServerMethodName,
+	ServerMethodParameters,
+	ServerMethodReturn,
+	StreamKeys,
+	StreamNames,
+	StreamerCallbackArgs,
+} from '@rocket.chat/ddp-client';
+import type { Method, OperationParams, OperationResult, PathFor, PathPattern, UrlParams } from '@rocket.chat/rest-typings';
 import { createContext } from 'react';
-
-import type { ServerMethodName, ServerMethodParameters, ServerMethodReturn } from './methods';
 
 export type UploadResult = {
 	success: boolean;
@@ -17,21 +23,27 @@ export type ServerContextValue = {
 		methodName: MethodName,
 		...args: ServerMethodParameters<MethodName>
 	) => Promise<ServerMethodReturn<MethodName>>;
-	callEndpoint: <TMethod extends Method, TPath extends PathFor<TMethod>>(
-		method: TMethod,
-		path: TPath,
-		params: Serialized<OperationParams<TMethod, MatchPathPattern<TPath>>>,
-	) => Promise<Serialized<OperationResult<TMethod, MatchPathPattern<TPath>>>>;
+	callEndpoint: <TMethod extends Method, TPathPattern extends PathPattern>(args: {
+		method: TMethod;
+		pathPattern: TPathPattern;
+		keys: UrlParams<TPathPattern>;
+		params: OperationParams<TMethod, TPathPattern>;
+	}) => Promise<Serialized<OperationResult<TMethod, TPathPattern>>>;
 	uploadToEndpoint: (
-		endpoint: string,
-		params: any,
+		endpoint: PathFor<'POST'>,
 		formData: any,
 	) =>
 		| Promise<UploadResult>
 		| {
 				promise: Promise<UploadResult>;
 		  };
-	getStream: (streamName: string, options?: {}) => <T>(eventName: string, callback: (data: T) => void) => () => void;
+	getStream: <N extends StreamNames, K extends StreamKeys<N>>(
+		streamName: N,
+		_options?: {
+			retransmit?: boolean | undefined;
+			retransmitToSelf?: boolean | undefined;
+		},
+	) => (eventName: K, callback: (...args: StreamerCallbackArgs<N, K>) => void) => () => void;
 };
 
 export const ServerContext = createContext<ServerContextValue>({

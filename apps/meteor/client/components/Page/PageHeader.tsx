@@ -1,43 +1,24 @@
-import { Box } from '@rocket.chat/fuselage';
-import { useLayout } from '@rocket.chat/ui-contexts';
-import React, { useContext, FC, ReactNode } from 'react';
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
+import { useContext } from 'react';
 
-import BurgerMenu from '../BurgerMenu';
-import TemplateHeader from '../Header';
 import PageContext from './PageContext';
+import PageHeaderNoShadow from './PageHeaderNoShadow';
 
 type PageHeaderProps = {
 	title: ReactNode;
-};
+	onClickBack?: () => void;
+	borderBlockEndColor?: string;
+} & ComponentPropsWithoutRef<typeof PageHeaderNoShadow>;
 
-const PageHeader: FC<PageHeaderProps> = ({ children = undefined, title, ...props }) => {
+const PageHeader = ({ borderBlockEndColor, ...props }: PageHeaderProps) => {
 	const [border] = useContext(PageContext);
-	const { isMobile } = useLayout();
 
 	return (
-		<Box borderBlockEndWidth='x2' borderBlockEndColor={border ? 'neutral-200' : 'transparent'}>
-			<Box
-				marginBlock='x16'
-				marginInline='x24'
-				minHeight='x40'
-				display='flex'
-				flexDirection='row'
-				flexWrap='nowrap'
-				alignItems='center'
-				color='neutral-800'
-				{...props}
-			>
-				{isMobile && (
-					<TemplateHeader.ToolBox>
-						<BurgerMenu />
-					</TemplateHeader.ToolBox>
-				)}
-				<Box is='h2' fontScale='h2' flexGrow={1}>
-					{title}
-				</Box>
-				{children}
-			</Box>
-		</Box>
+		<PageHeaderNoShadow
+			borderBlockEndWidth='default'
+			borderBlockEndColor={(borderBlockEndColor ?? border) ? 'extra-light' : 'transparent'}
+			{...props}
+		/>
 	);
 };
 

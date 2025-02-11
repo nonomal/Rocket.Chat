@@ -1,16 +1,16 @@
-import { ServerMethodName, ServerMethodParameters, ServerMethodReturn } from '@rocket.chat/ui-contexts';
+import type { ServerMethodName, ServerMethodParameters, ServerMethodReturn } from '@rocket.chat/ddp-client';
 
-import { call } from './call';
-import { handleError } from './handleError';
+import { sdk } from '../../../app/utils/client/lib/SDKClient';
+import { dispatchToastMessage } from '../toast';
 
 export const callWithErrorHandling = async <M extends ServerMethodName>(
 	method: M,
 	...params: ServerMethodParameters<M>
 ): Promise<ServerMethodReturn<M>> => {
 	try {
-		return await call(method, ...params);
+		return await sdk.call(method, ...params);
 	} catch (error) {
-		handleError(error);
+		dispatchToastMessage({ type: 'error', message: error });
 		throw error;
 	}
 };

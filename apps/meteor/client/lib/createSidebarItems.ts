@@ -1,31 +1,43 @@
-import type { Subscription } from 'use-subscription';
+import type { Keys as IconName } from '@rocket.chat/icons';
+import type { LocationPathname } from '@rocket.chat/ui-contexts';
+import type { ReactElement } from 'react';
 
-type SidebarItem = {
+export type Item = {
 	i18nLabel: string;
-	href?: string;
-	icon?: string;
-	tag?: 'Alpha';
-	permissionGranted?: boolean | (() => boolean);
+	href?: LocationPathname | `https://go.rocket.chat/i/${string}`;
+	icon?: IconName;
+	tag?: 'Alpha' | 'Beta';
+	permissionGranted?: () => boolean;
+	pathSection?: string;
+	name?: string;
+	externalUrl?: boolean;
+	badge?: () => ReactElement;
 };
+export type SidebarDivider = { divider: boolean; i18nLabel: string };
+export type SidebarItem = Item | SidebarDivider;
+export const isSidebarItem = (item: SidebarItem): item is Item => !('divider' in item);
+
+export const isGoRocketChatLink = (link: string): link is `https://go.rocket.chat/i/${string}` =>
+	link.startsWith('https://go.rocket.chat/i/');
 
 export const createSidebarItems = (
 	initialItems: SidebarItem[] = [],
 ): {
 	registerSidebarItem: (item: SidebarItem) => void;
 	unregisterSidebarItem: (i18nLabel: SidebarItem['i18nLabel']) => void;
-	itemsSubscription: Subscription<SidebarItem[]>;
+	getSidebarItems: () => SidebarItem[];
+	subscribeToSidebarItems: (callback: () => void) => () => void;
 } => {
 	const items = initialItems;
 	let updateCb: () => void = () => undefined;
 
-	const itemsSubscription: Subscription<SidebarItem[]> = {
-		subscribe: (cb) => {
-			updateCb = cb;
-			return (): void => {
-				updateCb = (): void => undefined;
-			};
-		},
-		getCurrentValue: () => items,
+	const getSidebarItems = (): SidebarItem[] => items;
+
+	const subscribeToSidebarItems = (cb: () => void): (() => void) => {
+		updateCb = cb;
+		return (): void => {
+			updateCb = (): void => undefined;
+		};
 	};
 
 	const registerSidebarItem = (item: SidebarItem): void => {
@@ -42,6 +54,7 @@ export const createSidebarItems = (
 	return {
 		registerSidebarItem,
 		unregisterSidebarItem,
-		itemsSubscription,
+		getSidebarItems,
+		subscribeToSidebarItems,
 	};
 };

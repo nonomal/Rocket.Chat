@@ -1,27 +1,27 @@
+/* eslint-disable react-hooks/rules-of-hooks */
+import type { ISetting, SettingValue, LicenseModule } from '@rocket.chat/core-typings';
+import { License } from '@rocket.chat/license';
+import { Settings } from '@rocket.chat/models';
 import { Meteor } from 'meteor/meteor';
-import { ISetting, SettingValue } from '@rocket.chat/core-typings';
 
-import { settings } from '../../../../app/settings/server/functions/settings';
-import { isEnterprise, hasLicense, onValidateLicenses } from '../../license/server/license';
-import SettingsModel from '../../../../app/models/server/models/Settings';
+import { settings, SettingsEvents } from '../../../../app/settings/server';
 import { use } from '../../../../app/settings/server/Middleware';
-import { SettingsEvents } from '../../../../app/settings/server';
 
 export function changeSettingValue(record: ISetting): SettingValue {
 	if (!record.enterprise) {
 		return record.value;
 	}
 
-	if (!isEnterprise()) {
+	if (!License.hasValidLicense()) {
 		return record.invalidValue;
 	}
 
 	if (!record.modules?.length) {
-		return record.invalidValue;
+		return record.value;
 	}
 
 	for (const moduleName of record.modules) {
-		if (!hasLicense(moduleName)) {
+		if (!License.hasModule(moduleName as LicenseModule)) {
 			return record.invalidValue;
 		}
 	}
@@ -50,14 +50,16 @@ SettingsEvents.on('fetch-settings', (settings: Array<ISetting>): void => {
 	}
 });
 
-function updateSettings(): void {
-	const enterpriseSettings = SettingsModel.findEnterpriseSettings();
+async function updateSettings(): Promise<void> {
+	const enterpriseSettings = await Settings.findEnterpriseSettings();
 
-	enterpriseSettings.forEach((record: ISetting) => settings.set(record));
+	void enterpriseSettings.forEach((record: ISetting) => settings.set(record));
 }
 
-Meteor.startup(() => {
-	updateSettings();
+Meteor.startup(async () => {
+	await updateSettings();
 
-	onValidateLicenses(updateSettings);
+	License.onValidateLicense(updateSettings);
+	License.onInvalidateLicense(updateSettings);
+	License.onRemoveLicense(updateSettings);
 });

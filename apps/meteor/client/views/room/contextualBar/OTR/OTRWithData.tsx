@@ -1,24 +1,23 @@
-import { IRoom } from '@rocket.chat/core-typings';
-import React, { useEffect, useMemo, useCallback, ReactElement } from 'react';
+import type { ReactElement } from 'react';
+import { useEffect } from 'react';
 
-import { OtrRoomState } from '../../../../../app/otr/client/OtrRoomState';
-import { OTR as ORTInstance } from '../../../../../app/otr/client/rocketchat.otr';
+import OTRComponent from './OTR';
+import { OtrRoomState } from '../../../../../app/otr/lib/OtrRoomState';
+import { useOTR } from '../../../../hooks/useOTR';
 import { usePresence } from '../../../../hooks/usePresence';
-import { useReactiveValue } from '../../../../hooks/useReactiveValue';
-import { useTabBarClose } from '../../providers/ToolboxProvider';
-import OTR from './OTR';
+import { useRoomToolbox } from '../../contexts/RoomToolboxContext';
 
-const OTRWithData = ({ rid }: { rid: IRoom['_id'] }): ReactElement => {
-	const closeTabBar = useTabBarClose();
-	const otr = useMemo(() => ORTInstance.getInstanceByRoomId(rid), [rid]);
-	const otrState = useReactiveValue(useCallback(() => (otr ? otr.state.get() : OtrRoomState.ERROR), [otr]));
-	const peerUserPresence = usePresence(otr.peerId);
+const OTRWithData = (): ReactElement => {
+	const { otr, otrState } = useOTR();
+	const { closeTab } = useRoomToolbox();
+
+	const peerUserPresence = usePresence(otr?.getPeerId());
 	const userStatus = peerUserPresence?.status;
 	const peerUsername = peerUserPresence?.username;
 	const isOnline = !['offline', 'loading'].includes(userStatus || '');
 
 	const handleStart = (): void => {
-		otr.handshake();
+		otr?.handshake();
 	};
 
 	const handleEnd = (): void => {
@@ -26,8 +25,8 @@ const OTRWithData = ({ rid }: { rid: IRoom['_id'] }): ReactElement => {
 	};
 
 	const handleReset = (): void => {
-		otr.reset();
-		otr.handshake(true);
+		otr?.reset();
+		otr?.handshake(true);
 	};
 
 	useEffect(() => {
@@ -36,7 +35,7 @@ const OTRWithData = ({ rid }: { rid: IRoom['_id'] }): ReactElement => {
 		}
 
 		const timeout = setTimeout(() => {
-			otr.state.set(OtrRoomState.TIMEOUT);
+			otr?.setState(OtrRoomState.TIMEOUT);
 		}, 10000);
 
 		return (): void => {
@@ -45,9 +44,9 @@ const OTRWithData = ({ rid }: { rid: IRoom['_id'] }): ReactElement => {
 	}, [otr, otrState]);
 
 	return (
-		<OTR
+		<OTRComponent
 			isOnline={isOnline}
-			onClickClose={closeTabBar}
+			onClickClose={closeTab}
 			onClickStart={handleStart}
 			onClickEnd={handleEnd}
 			onClickRefresh={handleReset}

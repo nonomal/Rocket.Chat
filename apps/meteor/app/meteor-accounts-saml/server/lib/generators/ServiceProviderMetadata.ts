@@ -1,9 +1,9 @@
 import { Meteor } from 'meteor/meteor';
 
-import { defaultIdentifierFormat, defaultMetadataCertificateTemplate, defaultMetadataTemplate } from '../constants';
+import type { IMetadataVariables } from '../../definition/IMetadataVariables';
+import type { IServiceProviderOptions } from '../../definition/IServiceProviderOptions';
 import { SAMLUtils } from '../Utils';
-import { IServiceProviderOptions } from '../../definition/IServiceProviderOptions';
-import { IMetadataVariables } from '../../definition/IMetadataVariables';
+import { defaultIdentifierFormat, defaultMetadataCertificateTemplate, defaultMetadataTemplate } from '../constants';
 
 /*
 	The metadata will be available at the following url:

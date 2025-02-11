@@ -1,6 +1,8 @@
 import { Box } from '@rocket.chat/fuselage';
-import React, { FC } from 'react';
+import type { ReactNode } from 'react';
 
-const Field: FC = ({ children }) => <Box mb='x16'>{children}</Box>;
+type FieldProps = { children?: ReactNode };
+
+const Field = ({ children }: FieldProps) => <Box mb={16}>{children}</Box>;
 
 export default Field;

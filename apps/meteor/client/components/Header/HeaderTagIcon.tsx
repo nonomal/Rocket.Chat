@@ -1,16 +1,22 @@
-import { Box, Icon } from '@rocket.chat/fuselage';
-import colors from '@rocket.chat/fuselage-tokens/colors';
-import React, { ComponentProps, FC, isValidElement, ReactElement } from 'react';
+import {
+	FeaturePreview,
+	FeaturePreviewOff,
+	FeaturePreviewOn,
+	HeaderV2TagIcon,
+	HeaderTagIcon as HeaderTagIconComponent,
+} from '@rocket.chat/ui-client';
+import type { ComponentProps } from 'react';
+import { memo } from 'react';
 
-type HeaderIconProps = {
-	icon: ReactElement | Pick<ComponentProps<typeof Icon>, 'name' | 'color'> | null;
-};
+const HeaderTagIcon = (props: ComponentProps<typeof HeaderTagIconComponent>) => (
+	<FeaturePreview feature='newNavigation'>
+		<FeaturePreviewOff>
+			<HeaderTagIconComponent {...props} />
+		</FeaturePreviewOff>
+		<FeaturePreviewOn>
+			<HeaderV2TagIcon {...props} />
+		</FeaturePreviewOn>
+	</FeaturePreview>
+);
 
-const HeaderTagIcon: FC<HeaderIconProps> = ({ icon }) =>
-	icon ? (
-		<Box w='x16' mie='x2' display='inline-flex' justifyContent='center'>
-			{isValidElement(icon) ? icon : <Icon size='x16' color={colors.n700} {...icon} />}
-		</Box>
-	) : null;
-
-export default HeaderTagIcon;
+export default memo(HeaderTagIcon);

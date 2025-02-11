@@ -1,12 +1,15 @@
-import http, { RequestOptions } from 'http';
+import type { RequestOptions } from 'http';
+import http from 'http';
+import type { Readable } from 'stream';
 import url from 'url';
-import { Readable } from 'stream';
 
-import WebSocket from 'ws';
 import cookie from 'cookie';
-import express, { Request, Response } from 'express';
 import cookieParser from 'cookie-parser';
+import type { Request, Response } from 'express';
+import express from 'express';
+import he from 'he';
 import mem from 'mem';
+import WebSocket from 'ws';
 
 import { ServerSession } from '../../../../app/ecdh/server/ServerSession';
 
@@ -61,7 +64,7 @@ const proxy = async function (
 		delete options.headers['content-length'];
 	}
 
-	const connector = http.request(options, async function (serverResponse) {
+	const connector = http.request(options, async (serverResponse) => {
 		serverResponse.pause();
 		if (serverResponse.statusCode) {
 			res.writeHead(serverResponse.statusCode, serverResponse.headers);
@@ -104,7 +107,7 @@ app.post('/api/ecdh_proxy/initEncryptedSession', async (req, res) => {
 			publicKeyString: session.publicKeyString,
 		});
 	} catch (e) {
-		res.status(400).send(e.message);
+		res.status(400).send(e instanceof Error ? he.escape(e.message) : he.escape(String(e)));
 	}
 });
 
@@ -124,7 +127,8 @@ app.post('/api/ecdh_proxy/echo', async (req, res) => {
 		res.send(await session.encrypt(result));
 	} catch (e) {
 		console.error(e);
-		res.status(400).send(e.message);
+		const errorMessage = e instanceof Error ? e.message : String(e);
+		res.status(400).send(he.encode(errorMessage));
 	}
 });
 
@@ -191,9 +195,9 @@ app.use('/api/*', async (req, res) => {
 	}
 
 	try {
-		proxy(req, res, session);
+		void proxy(req, res, session);
 	} catch (e) {
-		res.status(400).send(e.message);
+		res.status(400).send(e instanceof Error ? e.message : String(e));
 	}
 });
 
@@ -227,9 +231,9 @@ app.use('/sockjs/:id1/:id2/xhr_send', async (req, res) => {
 	}
 
 	try {
-		proxy(req, res, session, xhrDataRequestProcess, xhrDataResponseProcess);
+		void proxy(req, res, session, xhrDataRequestProcess, xhrDataResponseProcess);
 	} catch (e) {
-		res.status(400).send(e.message);
+		res.status(400).send(e instanceof Error ? e.message : String(e));
 	}
 });
 
@@ -243,13 +247,13 @@ app.use('/sockjs/:id1/:id2/xhr', async (req, res) => {
 	}
 
 	try {
-		proxy(req, res, session, undefined, xhrDataResponseProcess);
+		void proxy(req, res, session, undefined, xhrDataResponseProcess);
 	} catch (e) {
-		res.status(400).send(e.message);
+		res.status(400).send(e instanceof Error ? e.message : String(e));
 	}
 });
 
 app.use((req, res) => {
 	res.setHeader('Access-Control-Allow-Origin', '*');
-	proxy(req, res);
+	void proxy(req, res);
 });

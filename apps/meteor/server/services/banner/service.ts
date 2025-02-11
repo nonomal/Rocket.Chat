@@ -1,38 +1,18 @@
-import { Db } from 'mongodb';
+import { api, ServiceClassInternal } from '@rocket.chat/core-services';
+import type { IBannerService } from '@rocket.chat/core-services';
+import type { BannerPlatform, IBanner, IBannerDismiss, Optional, IUser } from '@rocket.chat/core-typings';
+import { Banners, BannersDismiss, Users } from '@rocket.chat/models';
 import { v4 as uuidv4 } from 'uuid';
-import { BannerPlatform, IBanner, IBannerDismiss, Optional } from '@rocket.chat/core-typings';
-import type { IUser } from '@rocket.chat/core-typings';
-
-import { ServiceClassInternal } from '../../sdk/types/ServiceClass';
-import { BannersRaw } from '../../../app/models/server/raw/Banners';
-import { BannersDismissRaw } from '../../../app/models/server/raw/BannersDismiss';
-import { UsersRaw } from '../../../app/models/server/raw/Users';
-import { IBannerService } from '../../sdk/types/IBannerService';
-import { api } from '../../sdk/api';
 
 export class BannerService extends ServiceClassInternal implements IBannerService {
 	protected name = 'banner';
 
-	private Banners: BannersRaw;
-
-	private BannersDismiss: BannersDismissRaw;
-
-	private Users: UsersRaw;
-
-	constructor(db: Db) {
-		super();
-
-		this.Banners = new BannersRaw(db.collection('rocketchat_banner'));
-		this.BannersDismiss = new BannersDismissRaw(db.collection('rocketchat_banner_dismiss'));
-		this.Users = new UsersRaw(db.collection('users'));
-	}
-
 	async getById(bannerId: string): Promise<null | IBanner> {
-		return this.Banners.findOneById(bannerId);
+		return Banners.findOneById(bannerId);
 	}
 
 	async discardDismissal(bannerId: string): Promise<boolean> {
-		const result = await this.Banners.findOneById(bannerId);
+		const result = await Banners.findOneById(bannerId);
 
 		if (!result) {
 			return false;
@@ -42,49 +22,61 @@ export class BannerService extends ServiceClassInternal implements IBannerServic
 
 		const snapshot = await this.create({ ...banner, snapshot: _id, active: false }); // create a snapshot
 
-		await this.BannersDismiss.updateMany({ bannerId }, { $set: { bannerId: snapshot._id } });
+		await BannersDismiss.updateMany({ bannerId }, { $set: { bannerId: snapshot._id } });
 		return true;
 	}
 
-	async create(doc: Optional<IBanner, '_id'>): Promise<IBanner> {
+	async create(doc: Optional<IBanner, '_id' | '_updatedAt'>): Promise<IBanner> {
 		const bannerId = doc._id || uuidv4();
 
-		doc.view.appId = 'banner-core';
+		doc.view.appId = doc.view.appId ?? 'banner-core';
 		doc.view.viewId = bannerId;
 
-		await this.Banners.create({
+		await Banners.createOrUpdate({
 			...doc,
 			_id: bannerId,
 		});
 
-		const banner = await this.Banners.findOneById(bannerId);
+		const banner = await Banners.findOneById(bannerId);
 		if (!banner) {
 			throw new Error('error-creating-banner');
 		}
 
-		api.broadcast('banner.new', banner._id);
+		void this.sendToUsers(banner);
 
 		return banner;
 	}
 
 	async getBannersForUser(userId: string, platform: BannerPlatform, bannerId?: string): Promise<IBanner[]> {
-		const user = await this.Users.findOneById<Pick<IUser, 'roles'>>(userId, {
+		const user = await Users.findOneById<Pick<IUser, 'roles'>>(userId, {
 			projection: { roles: 1 },
 		});
 
 		const { roles } = user || { roles: [] };
 
-		const banners = await this.Banners.findActiveByRoleOrId(roles, platform, bannerId).toArray();
+		const banners = await Banners.findActiveByRoleOrId(roles, platform, bannerId).toArray();
 
 		const bannerIds = banners.map(({ _id }) => _id);
 
-		const result = await this.BannersDismiss.findByUserIdAndBannerId<Pick<IBannerDismiss, 'bannerId'>>(userId, bannerIds, {
+		const result = await BannersDismiss.findByUserIdAndBannerId<Pick<IBannerDismiss, 'bannerId'>>(userId, bannerIds, {
 			projection: { bannerId: 1, _id: 0 },
 		}).toArray();
 
 		const dismissed = new Set(result.map(({ bannerId }) => bannerId));
 
-		return banners.filter((banner) => !dismissed.has(banner._id));
+		return banners
+			.filter((banner) => !dismissed.has(banner._id))
+			.map((banner) => ({
+				...banner,
+				view: {
+					...banner.view,
+					// All modern banners should have a viewId, but we have old banners that were created without it
+					// such as the seatsTaken banner. In this case, we use the bannerId as the viewId
+					viewId: banner.view.viewId || banner._id,
+				},
+				// add surface to legacy banners
+				surface: !banner.surface ? 'banner' : banner.surface,
+			}));
 	}
 
 	async dismiss(userId: string, bannerId: string): Promise<boolean> {
@@ -92,12 +84,12 @@ export class BannerService extends ServiceClassInternal implements IBannerServic
 			throw new Error('Invalid params');
 		}
 
-		const banner = await this.Banners.findOneById(bannerId);
+		const banner = await Banners.findOneById(bannerId);
 		if (!banner) {
 			throw new Error('Banner not found');
 		}
 
-		const user = await this.Users.findOneById<Pick<IUser, 'username' | '_id'>>(userId, {
+		const user = await Users.findOneById<Pick<IUser, 'username' | '_id'>>(userId, {
 			projection: { username: 1 },
 		});
 		if (!user) {
@@ -119,23 +111,23 @@ export class BannerService extends ServiceClassInternal implements IBannerServic
 			_updatedAt: today,
 		};
 
-		await this.BannersDismiss.insertOne(doc);
+		await BannersDismiss.insertOne(doc);
 
 		return true;
 	}
 
 	async disable(bannerId: string): Promise<boolean> {
-		const result = await this.Banners.disable(bannerId);
+		const result = await Banners.disable(bannerId);
 
 		if (result) {
-			api.broadcast('banner.disabled', bannerId);
+			void api.broadcast('banner.disabled', bannerId);
 			return true;
 		}
 		return false;
 	}
 
 	async enable(bannerId: string, doc: Partial<Omit<IBanner, '_id'>> = {}): Promise<boolean> {
-		const result = await this.Banners.findOneById(bannerId);
+		const result = await Banners.findOneById(bannerId);
 
 		if (!result) {
 			return false;
@@ -143,9 +135,38 @@ export class BannerService extends ServiceClassInternal implements IBannerServic
 
 		const { _id, ...banner } = result;
 
-		this.Banners.update({ _id }, { ...banner, ...doc, active: true }); // reenable the banner
+		const newBanner = { ...banner, ...doc, active: true };
 
-		api.broadcast('banner.enabled', bannerId);
+		await Banners.updateOne({ _id }, { $set: newBanner }); // reenable the banner
+
+		void this.sendToUsers({ _id, ...newBanner });
+
+		return true;
+	}
+
+	async sendToUsers(banner: IBanner): Promise<boolean> {
+		if (!banner.active) {
+			return false;
+		}
+
+		// no roles set, so it should be sent to all users
+		if (!banner.roles?.length) {
+			void api.broadcast('banner.enabled', banner._id);
+			return true;
+		}
+
+		const total = await Users.countActiveUsersInRoles(banner.roles);
+
+		// if more than 100 users should receive the banner, send it to all users
+		if (total > 100) {
+			void api.broadcast('banner.enabled', banner._id);
+			return true;
+		}
+
+		await Users.findActiveUsersInRoles(banner.roles, { projection: { _id: 1 } }).forEach((user) => {
+			void api.broadcast('banner.user', user._id, banner);
+		});
+
 		return true;
 	}
 }

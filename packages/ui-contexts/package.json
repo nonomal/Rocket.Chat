@@ -1,48 +1,46 @@
 {
 	"name": "@rocket.chat/ui-contexts",
-	"version": "0.0.1",
+	"version": "15.0.0",
 	"private": true,
 	"devDependencies": {
 		"@rocket.chat/core-typings": "workspace:^",
-		"@rocket.chat/emitter": "^0.31.11",
-		"@rocket.chat/fuselage-hooks": "^0.31.11",
+		"@rocket.chat/ddp-client": "workspace:~",
+		"@rocket.chat/emitter": "~0.31.25",
+		"@rocket.chat/fuselage-hooks": "~0.34.1",
+		"@rocket.chat/i18n": "workspace:~",
 		"@rocket.chat/rest-typings": "workspace:^",
-		"@types/jest": "^27.4.1",
-		"@types/mongodb": "~3.6.10",
-		"@types/react": "^17",
-		"@types/use-subscription": "^1",
-		"eslint": "^8.12.0",
-		"jest": "^27.5.1",
-		"react": "~17.0.2",
-		"ts-jest": "^27.1.4",
-		"typescript": "~4.3.5",
-		"use-subscription": "~1.6.0"
+		"@types/react": "~18.3.17",
+		"@types/react-dom": "~18.3.5",
+		"eslint": "~8.45.0",
+		"eslint-plugin-react-hooks": "^5.0.0",
+		"mongodb": "patch:mongodb@npm%3A6.10.0#~/.yarn/patches/mongodb-npm-6.10.0-b914157c35.patch",
+		"react": "~18.3.1",
+		"typescript": "~5.7.2"
 	},
 	"peerDependencies": {
 		"@rocket.chat/core-typings": "workspace:^",
+		"@rocket.chat/ddp-client": "workspace:^",
 		"@rocket.chat/emitter": "*",
 		"@rocket.chat/fuselage-hooks": "*",
+		"@rocket.chat/i18n": "workspace:~",
 		"@rocket.chat/rest-typings": "workspace:^",
-		"react": "~17.0.2",
-		"use-subscription": "*"
+		"react": "~17.0.2"
+	},
+	"dependencies": {
+		"@rocket.chat/password-policies": "workspace:^"
+	},
+	"volta": {
+		"extends": "../../package.json"
 	},
 	"scripts": {
 		"lint": "eslint --ext .js,.jsx,.ts,.tsx .",
 		"lint:fix": "eslint --ext .js,.jsx,.ts,.tsx . --fix",
-		"jest": "jest",
+		"dev": "tsc --watch --preserveWatchOutput -p tsconfig.json",
 		"build": "rm -rf dist && tsc -p tsconfig.json"
 	},
 	"main": "./dist/index.js",
 	"typings": "./dist/index.d.ts",
 	"files": [
 		"/dist"
-	],
-	"eslintConfig": {
-		"extends": [
-			"@rocket.chat/eslint-config"
-		],
-		"ignorePatterns": [
-			"**/dist"
-		]
-	}
+	]
 }

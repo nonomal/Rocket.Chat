@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/interface-name-prefix */
-import * as mongodb from 'mongodb';
+import type * as mongodb from 'mongodb';
 
 declare module 'meteor/mongo' {
 	interface RemoteCollectionDriver {
@@ -8,14 +7,16 @@ declare module 'meteor/mongo' {
 
 	interface OplogHandle {
 		stop(): void;
-		onOplogEntry(trigger: Record<string, any>, callback: Function): void;
-		onSkippedEntries(callback: Function): void;
+		onOplogEntry(trigger: Record<string, any>, callback: (notification: unknown) => void): void;
+		onSkippedEntries(callback: () => void): void;
 		waitUntilCaughtUp(): void;
 		_defineTooFarBehind(value: number): void;
+		_entryQueue?: unknown[];
 	}
 
 	interface MongoConnection {
 		db: mongodb.Db;
+		client: mongodb.MongoClient;
 		_oplogHandle: OplogHandle;
 		rawCollection(name: string): mongodb.Collection;
 	}
@@ -29,14 +30,13 @@ declare module 'meteor/mongo' {
 	}
 
 	namespace Mongo {
-		// eslint-disable-next-line @typescript-eslint/interface-name-prefix
 		interface CollectionStatic {
 			new <T>(
 				name: string | null,
 				options?: {
 					connection?: object | null;
 					idGeneration?: string;
-					transform?: Function | null;
+					transform?: (<T>(doc: T) => T) | null;
 				},
 			): Collection<T>;
 		}

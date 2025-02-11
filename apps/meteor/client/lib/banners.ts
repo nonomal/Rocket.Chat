@@ -1,23 +1,21 @@
-import { UiKitBannerPayload } from '@rocket.chat/core-typings';
 import { Emitter } from '@rocket.chat/emitter';
-import { Icon } from '@rocket.chat/fuselage';
-import { ComponentProps } from 'react';
-import { Subscription } from 'use-subscription';
+import type { Keys as IconName } from '@rocket.chat/icons';
+import type * as UiKit from '@rocket.chat/ui-kit';
 
 export type LegacyBannerPayload = {
 	id: string;
 	closable?: boolean;
-	title?: string;
-	text?: string;
-	html?: string;
-	icon?: ComponentProps<typeof Icon>['name'];
+	title?: string | (() => string);
+	text?: string | (() => string);
+	html?: string | (() => string);
+	icon?: IconName;
 	modifiers?: ('large' | 'danger')[];
 	timer?: number;
-	action?: () => void;
-	onClose?: () => void;
+	action?: () => Promise<void> | void;
+	onClose?: () => Promise<void> | void;
 };
 
-type BannerPayload = LegacyBannerPayload | UiKitBannerPayload;
+type BannerPayload = LegacyBannerPayload | UiKit.BannerView;
 
 export const isLegacyPayload = (payload: BannerPayload): payload is LegacyBannerPayload => !('blocks' in payload);
 
@@ -27,17 +25,22 @@ const emitter = new Emitter<{
 	'update-first': undefined;
 }>();
 
-export const firstSubscription: Subscription<BannerPayload | null> = {
-	getCurrentValue: () => queue[0] ?? null,
-	subscribe: (callback) => emitter.on('update-first', callback),
-};
+export const firstSubscription = [
+	(callback: () => void): (() => void) => emitter.on('update-first', callback),
+	(): BannerPayload | null => queue[0] ?? null,
+] as const;
 
 export const open = (payload: BannerPayload): void => {
 	let index = queue.findIndex((_payload) => {
-		if (isLegacyPayload(_payload)) {
-			return _payload.id === (payload as LegacyBannerPayload).id;
+		if (isLegacyPayload(_payload) && isLegacyPayload(payload)) {
+			return _payload.id === payload.id;
 		}
-		return (_payload as UiKitBannerPayload).viewId === (payload as UiKitBannerPayload).viewId;
+
+		if (!isLegacyPayload(_payload) && !isLegacyPayload(payload)) {
+			return _payload.viewId === payload.viewId;
+		}
+
+		return false;
 	});
 
 	if (index === -1) {

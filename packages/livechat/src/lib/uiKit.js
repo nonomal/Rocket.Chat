@@ -99,36 +99,25 @@ const handlePayloadUserInteraction = (type, { /* appId,*/ triggerId, ...data }) 
 	return UIKitInteractionType.MODAL_ClOSE;
 };
 
-export const triggerAction = async ({
-	appId,
-	type,
-	actionId,
-	rid,
-	mid,
-	viewId,
-	container,
-	payload,
-}) => {
+export const triggerAction = async ({ appId, type, actionId, rid, mid, viewId, container, payload }) => {
 	const triggerId = generateTriggerId(appId);
 
 	try {
-		const params = {
-			type,
-			actionId,
-			rid,
-			mid,
-			viewId,
-			container,
-			triggerId,
-			payload,
-		};
-
 		const result = await Promise.race([
-			fetch(`${ Livechat.client.host }/api/${ encodeURI(`apps/ui.interaction/${ appId }`) }`, {
-				method: 'POST',
-				body: Livechat.client.getBody(params),
-				headers: Object.assign({ 'x-visitor-token': Livechat.credentials.token }, Livechat.client.getHeaders()),
-			}).then(Livechat.client.handle),
+			Livechat.sendUiInteraction(
+				{
+					type,
+					actionId,
+					rid,
+					mid,
+					viewId,
+					container,
+					triggerId,
+					payload,
+				},
+				appId,
+			),
+
 			new Promise((_, reject) => {
 				setTimeout(() => {
 					reject(new Error(triggerId));

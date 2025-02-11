@@ -1,46 +1,23 @@
 import { Box, Tag } from '@rocket.chat/fuselage';
-import { useSafely } from '@rocket.chat/fuselage-hooks';
-import { useMethod } from '@rocket.chat/ui-contexts';
-import React, { ReactElement, useEffect, useState } from 'react';
 
-import { ILicenseTag } from '../../ee/app/license/definitions/ILicenseTag';
+import { isTruthy } from '../../lib/isTruthy';
+import { useLicense } from '../hooks/useLicense';
 
-function PlanTag(): ReactElement {
-	const [plans, setPlans] = useSafely(
-		useState<
-			{
-				name: string;
-				color: string;
-			}[]
-		>([]),
-	);
+const developmentTag = process.env.NODE_ENV === 'development' ? 'Development' : null;
+function PlanTag() {
+	const license = useLicense();
 
-	const getTags = useMethod('license:getTags');
-
-	useEffect(() => {
-		const developmentTag = process.env.NODE_ENV === 'development' ? { name: 'development', color: '#095ad2' } : null;
-
-		const fetchTags = async (): Promise<void> => {
-			const tags = await getTags();
-			setPlans([developmentTag, ...tags].filter(Boolean) as ILicenseTag[]);
-		};
-
-		fetchTags();
-	}, [getTags, setPlans]);
+	const tags = [
+		developmentTag && { name: developmentTag },
+		...(license.data?.tags ?? []),
+		!license.isLoading && !license.isError && !license.data?.license && { name: 'Community' },
+	].filter(isTruthy);
 
 	return (
 		<>
-			{plans.map(({ name, color }) => (
-				<Box marginInline='x4' display='inline-block' verticalAlign='middle' key={name}>
-					<Tag
-						style={{
-							color: '#fff',
-							backgroundColor: color,
-							textTransform: 'capitalize',
-						}}
-					>
-						{name}
-					</Tag>
+			{tags.map(({ name }) => (
+				<Box marginInline={4} display='inline-block' verticalAlign='middle' key={name}>
+					<Tag variant='primary'>{name}</Tag>
 				</Box>
 			))}
 		</>

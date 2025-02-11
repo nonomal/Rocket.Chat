@@ -1,5 +1,5 @@
 import { Modal } from '@rocket.chat/fuselage';
-import React, { ComponentProps, ReactElement } from 'react';
+import type { ComponentProps, ReactElement } from 'react';
 
 type BackdropProps = ComponentProps<typeof Modal.Backdrop>;
 

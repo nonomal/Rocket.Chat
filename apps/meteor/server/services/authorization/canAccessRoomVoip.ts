@@ -1,9 +1,8 @@
-import { IAuthorizationVoip } from '../../sdk/types/IAuthorizationVoip';
-import { proxifyWithWait } from '../../sdk/lib/proxify';
-import { RoomAccessValidator } from '../../sdk/types/IAuthorization';
-import { Rooms } from './service';
+import type { IAuthorizationVoip, RoomAccessValidator } from '@rocket.chat/core-services';
+import { proxify } from '@rocket.chat/core-services';
+import { Rooms } from '@rocket.chat/models';
 
-export const AuthorizationVoip = proxifyWithWait<IAuthorizationVoip>('authorization-livechat');
+const AuthorizationVoip = proxify<IAuthorizationVoip>('authorization-livechat');
 
 export const canAccessRoomVoip: RoomAccessValidator = async (room, user, extraData): Promise<boolean> => {
 	// room can be sent as `null` but in that case a `rid` is also sent on extraData

@@ -1,19 +1,16 @@
 import type { IRoom } from '@rocket.chat/core-typings';
 import { Box } from '@rocket.chat/fuselage';
-import React, { useEffect, FC } from 'react';
+import type { ReactElement } from 'react';
 
-import { openRoom } from '../../../../../app/ui-utils/client/lib/openRoom';
-import RoomWithData from '../../../room/Room';
+import RoomOpener from '../../../room/RoomOpener';
 
-const Chat: FC<{ rid: IRoom['_id'] }> = ({ rid }) => {
-	useEffect(() => {
-		openRoom('v', rid, false);
-	}, [rid]);
+type CallProps = { rid: IRoom['_id'] };
 
+const Call = ({ rid }: CallProps): ReactElement => {
 	return (
 		<Box position='absolute' backgroundColor='surface' width='full' height='full'>
-			<RoomWithData />
+			<RoomOpener type='v' reference={rid} />
 		</Box>
 	);
 };
-export default Chat;
+export default Call;

@@ -1,8 +1,8 @@
 import { usePermission } from '@rocket.chat/ui-contexts';
-import React, { ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
-import NotAuthorizedPage from '../../../notAuthorized/NotAuthorizedPage';
 import CallTable from './CallTable';
+import NotAuthorizedPage from '../../../notAuthorized/NotAuthorizedPage';
 
 // TODO Check if I need to type the setstateaction params, if I should do:
 // { setCallReload: Dispatch<SetStateAction<(param: () => void) => void>> }

@@ -22,7 +22,7 @@ export const useTeamsChannelList = (
 	reload: () => void;
 	loadMoreItems: (start: number, end: number) => void;
 } => {
-	const apiEndPoint = useEndpoint('GET', 'teams.listRooms');
+	const apiEndPoint = useEndpoint('GET', '/v1/teams.listRooms');
 	const [teamsChannelList, setTeamsChannelList] = useState(() => new RecordList<IRoom>());
 	const reload = useCallback(() => setTeamsChannelList(new RecordList<IRoom>()), []);
 
@@ -31,7 +31,7 @@ export const useTeamsChannelList = (
 	}, [options, reload]);
 
 	const fetchData = useCallback(
-		async (start, end) => {
+		async (start: number, end: number) => {
 			const { rooms, total } = await apiEndPoint({
 				teamId: options.teamId,
 				offset: start,
@@ -41,13 +41,13 @@ export const useTeamsChannelList = (
 			});
 
 			return {
-				items: rooms.map(({ _updatedAt, lastMessage, lm, ts, jitsiTimeout, webRtcCallStartTime, ...room }) => ({
-					...(jitsiTimeout && { jitsiTimeout: new Date(jitsiTimeout) }),
+				items: rooms.map(({ _updatedAt, lastMessage, lm, ts, webRtcCallStartTime, usersWaitingForE2EKeys, ...room }) => ({
 					...(lm && { lm: new Date(lm) }),
 					...(ts && { ts: new Date(ts) }),
 					_updatedAt: new Date(_updatedAt),
 					...(lastMessage && { lastMessage: mapMessageFromApi(lastMessage) }),
 					...(webRtcCallStartTime && { webRtcCallStartTime: new Date(webRtcCallStartTime) }),
+					...usersWaitingForE2EKeys?.map(({ userId, ts }) => ({ userId, ts: new Date(ts) })),
 					...room,
 				})),
 				itemCount: total,
@@ -59,10 +59,7 @@ export const useTeamsChannelList = (
 	const { loadMoreItems, initialItemCount } = useScrollableRecordList(
 		teamsChannelList,
 		fetchData,
-		useMemo(() => {
-			const filesListSize = getConfig('teamsChannelListSize');
-			return filesListSize ? parseInt(filesListSize, 10) : undefined;
-		}, []),
+		useMemo(() => parseInt(`${getConfig('teamsChannelListSize', 10)}`), []),
 	);
 
 	return {

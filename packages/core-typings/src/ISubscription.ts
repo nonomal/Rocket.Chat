@@ -5,9 +5,11 @@ import type { RoomType } from './RoomType';
 
 type RoomID = string;
 
+export type OldKey = { e2eKeyId: string; ts: Date; E2EKey: string };
+
 export interface ISubscription extends IRocketChatRecord {
 	u: Pick<IUser, '_id' | 'username' | 'name'>;
-	v?: Pick<IUser, '_id' | 'username' | 'name'>;
+	v?: Pick<IUser, '_id' | 'username' | 'name' | 'status'> & { token?: string };
 	rid: RoomID;
 	open: boolean;
 	ts: Date;
@@ -18,16 +20,17 @@ export interface ISubscription extends IRocketChatRecord {
 	unread: number;
 	t: RoomType;
 	ls: Date;
-	f?: true;
+	f?: boolean;
 	lr: Date;
 	hideUnreadStatus?: true;
+	hideMentionStatus?: true;
 	teamMain?: boolean;
 	teamId?: string;
 
 	userMentions: number;
 	groupMentions: number;
 
-	broadcast?: boolean;
+	broadcast?: true;
 	tunread?: Array<string>;
 	tunreadGroup?: Array<string>;
 	tunreadUser?: Array<string>;
@@ -39,25 +42,36 @@ export interface ISubscription extends IRocketChatRecord {
 	onHold?: boolean;
 	encrypted?: boolean;
 	E2EKey?: string;
+	E2ESuggestedKey?: string;
 	unreadAlert?: 'default' | 'all' | 'mentions' | 'nothing';
 
 	fname?: string;
 
 	code?: unknown;
-	archived?: unknown;
-	audioNotificationValue?: unknown;
-	desktopNotifications?: unknown;
-	mobilePushNotifications?: unknown;
-	emailNotifications?: unknown;
+	archived?: boolean;
+	audioNotificationValue?: string;
+	desktopNotifications?: 'all' | 'mentions' | 'nothing';
+	mobilePushNotifications?: 'all' | 'mentions' | 'nothing';
+	emailNotifications?: 'all' | 'mentions' | 'nothing';
+	userHighlights?: string[];
 	blocked?: unknown;
 	blocker?: unknown;
-	autoTranslate?: unknown;
-	autoTranslateLanguage?: unknown;
-	disableNotifications?: unknown;
-	muteGroupMentions?: unknown;
-	ignored?: unknown;
+	autoTranslate?: boolean;
+	autoTranslateLanguage?: string;
+	disableNotifications?: boolean;
+	muteGroupMentions?: boolean;
+	ignored?: IUser['_id'][];
 
 	department?: unknown;
+
+	desktopPrefOrigin?: 'subscription' | 'user';
+	mobilePrefOrigin?: 'subscription' | 'user';
+	emailPrefOrigin?: 'subscription' | 'user';
+
+	/* @deprecated */
+	customFields?: Record<string, any>;
+	oldRoomKeys?: OldKey[];
+	suggestedOldRoomKeys?: OldKey[];
 }
 
 export interface IOmnichannelSubscription extends ISubscription {

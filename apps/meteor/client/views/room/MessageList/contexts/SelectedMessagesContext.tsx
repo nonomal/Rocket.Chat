@@ -1,6 +1,4 @@
-import { OffCallbackHandler } from '@rocket.chat/emitter';
-import { createContext, useCallback, useContext, useMemo } from 'react';
-import { useSubscription } from 'use-subscription';
+import { createContext, useCallback, useContext, useEffect, useSyncExternalStore } from 'react';
 
 import { selectedMessageStore } from '../../providers/SelectedMessagesProvider';
 
@@ -12,30 +10,42 @@ export const SelectedMessageContext = createContext({
 	selectedMessageStore,
 } as SelectMessageContextValue);
 
-export const useIsSelectedMessage = (mid: string): boolean => {
+export const useIsSelectedMessage = (mid: string, omit?: boolean): boolean => {
 	const { selectedMessageStore } = useContext(SelectedMessageContext);
-	const subscription = useMemo(
-		() => ({
-			getCurrentValue: (): boolean => selectedMessageStore.isSelected(mid),
-			subscribe: (callback: () => void): OffCallbackHandler => selectedMessageStore.on(mid, callback),
-		}),
-		[mid, selectedMessageStore],
+
+	const subscribe = useCallback(
+		(callback: () => void): (() => void) => selectedMessageStore.on(mid, callback),
+		[selectedMessageStore, mid],
 	);
-	return useSubscription(subscription);
+
+	const getSnapshot = (): boolean => selectedMessageStore.isSelected(mid);
+
+	const isSelected = useSyncExternalStore(subscribe, getSnapshot);
+
+	useEffect(() => {
+		if (isSelected || omit) {
+			return;
+		}
+
+		selectedMessageStore.addAvailableMessage(mid);
+
+		return () => selectedMessageStore.removeAvailableMessage(mid);
+	}, [mid, selectedMessageStore, isSelected, omit]);
+
+	return isSelected;
 };
 
 export const useIsSelecting = (): boolean => {
 	const { selectedMessageStore } = useContext(SelectedMessageContext);
 
-	return useSubscription(
-		useMemo(
-			() => ({
-				getCurrentValue: (): boolean => selectedMessageStore.getIsSelecting(),
-				subscribe: (callback: () => void): OffCallbackHandler => selectedMessageStore.on('toggleIsSelecting', callback),
-			}),
-			[selectedMessageStore],
-		),
+	const subscribe = useCallback(
+		(callback: () => void): (() => void) => selectedMessageStore.on('toggleIsSelecting', callback),
+		[selectedMessageStore],
 	);
+
+	const getSnapshot = (): boolean => selectedMessageStore.getIsSelecting();
+
+	return useSyncExternalStore(subscribe, getSnapshot);
 };
 
 export const useToggleSelect = (mid: string): (() => void) => {
@@ -45,16 +55,42 @@ export const useToggleSelect = (mid: string): (() => void) => {
 	}, [mid, selectedMessageStore]);
 };
 
+export const useToggleSelectAll = (): (() => void) => {
+	const { selectedMessageStore } = useContext(SelectedMessageContext);
+	return useCallback(() => {
+		selectedMessageStore.toggleAll(Array.from(selectedMessageStore.availableMessages));
+	}, [selectedMessageStore]);
+};
+
+export const useClearSelection = (): (() => void) => {
+	const { selectedMessageStore } = useContext(SelectedMessageContext);
+	return useCallback(() => {
+		selectedMessageStore.clearStore();
+	}, [selectedMessageStore]);
+};
+
 export const useCountSelected = (): number => {
 	const { selectedMessageStore } = useContext(SelectedMessageContext);
 
-	return useSubscription(
-		useMemo(
-			() => ({
-				getCurrentValue: (): number => selectedMessageStore.count(),
-				subscribe: (callback: () => void): OffCallbackHandler => selectedMessageStore.on('change', callback),
-			}),
-			[selectedMessageStore],
-		),
+	const subscribe = useCallback(
+		(callback: () => void): (() => void) => selectedMessageStore.on('change', callback),
+		[selectedMessageStore],
 	);
+
+	const getSnapshot = (): number => selectedMessageStore.count();
+
+	return useSyncExternalStore(subscribe, getSnapshot);
+};
+
+export const useAvailableMessagesCount = () => {
+	const { selectedMessageStore } = useContext(SelectedMessageContext);
+
+	const subscribe = useCallback(
+		(callback: () => void): (() => void) => selectedMessageStore.on('change', callback),
+		[selectedMessageStore],
+	);
+
+	const getSnapshot = () => selectedMessageStore.availableMessagesCount();
+
+	return useSyncExternalStore(subscribe, getSnapshot);
 };

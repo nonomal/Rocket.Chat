@@ -1,42 +1,25 @@
-import { useRoutePath, useCurrentRoute, useTranslation } from '@rocket.chat/ui-contexts';
-import React, { useCallback, useEffect, FC, memo } from 'react';
-import { useSubscription } from 'use-subscription';
+import { useTranslation, useLayout, useCurrentRoutePath } from '@rocket.chat/ui-contexts';
+import { memo, useSyncExternalStore } from 'react';
 
-import { menu, SideNav } from '../../../../app/ui-utils/client';
 import Sidebar from '../../../components/Sidebar';
-import { isLayoutEmbedded } from '../../../lib/utils/isLayoutEmbedded';
+import SidebarItemsAssemblerProps from '../../../components/Sidebar/SidebarItemsAssembler';
 import SettingsProvider from '../../../providers/SettingsProvider';
-import { itemsSubscription } from '../sidebarItems';
+import { getOmnichannelSidebarItems, subscribeToOmnichannelSidebarItems } from '../sidebarItems';
 
-const OmnichannelSidebar: FC = () => {
-	const items = useSubscription(itemsSubscription);
+const OmnichannelSidebar = () => {
+	const items = useSyncExternalStore(subscribeToOmnichannelSidebarItems, getOmnichannelSidebarItems);
 	const t = useTranslation();
 
-	const closeOmnichannelFlex = useCallback(() => {
-		if (isLayoutEmbedded()) {
-			menu.close();
-			return;
-		}
+	const { sidebar } = useLayout();
 
-		SideNav.closeFlex();
-	}, []);
-
-	const currentRoute = useCurrentRoute();
-	const [currentRouteName, currentRouteParams, currentQueryStringParams, currentRouteGroupName] = currentRoute;
-	const currentPath = useRoutePath(currentRouteName ?? '', currentRouteParams, currentQueryStringParams);
-
-	useEffect(() => {
-		if (currentRouteGroupName !== 'omnichannel') {
-			SideNav.closeFlex();
-		}
-	}, [currentRouteGroupName]);
+	const currentPath = useCurrentRoutePath();
 
 	return (
 		<SettingsProvider privileged>
 			<Sidebar>
-				<Sidebar.Header onClose={closeOmnichannelFlex} title={<>{t('Omnichannel')}</>} />
+				<Sidebar.Header onClose={sidebar.close} title={t('Omnichannel')} />
 				<Sidebar.Content>
-					<Sidebar.ItemsAssembler items={items} currentPath={currentPath} />
+					<SidebarItemsAssemblerProps items={items} currentPath={currentPath} />
 				</Sidebar.Content>
 			</Sidebar>
 		</SettingsProvider>

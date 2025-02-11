@@ -1,9 +1,24 @@
-import { Button, ButtonGroup, TextInput, Field, TextAreaInput, ToggleSwitch, FieldGroup } from '@rocket.chat/fuselage';
-import { useToastMessageDispatch, useRoute, useMethod, useTranslation } from '@rocket.chat/ui-contexts';
-import React, { ReactElement, useCallback } from 'react';
-import { useForm, SubmitHandler, Controller } from 'react-hook-form';
+import {
+	Button,
+	ButtonGroup,
+	TextInput,
+	Field,
+	FieldLabel,
+	FieldRow,
+	FieldError,
+	FieldHint,
+	TextAreaInput,
+	ToggleSwitch,
+	FieldGroup,
+} from '@rocket.chat/fuselage';
+import { useToastMessageDispatch, useRoute, useEndpoint } from '@rocket.chat/ui-contexts';
+import type { ReactElement } from 'react';
+import { useCallback } from 'react';
+import type { SubmitHandler } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 
-import VerticalBar from '../../../components/VerticalBar';
+import { ContextualbarScrollableContent } from '../../../components/Contextualbar';
 
 type OAuthAddAppPayload = {
 	name: string;
@@ -12,7 +27,7 @@ type OAuthAddAppPayload = {
 };
 
 const OAuthAddApp = (): ReactElement => {
-	const t = useTranslation();
+	const { t } = useTranslation();
 	const dispatchToastMessage = useToastMessageDispatch();
 
 	const {
@@ -22,7 +37,7 @@ const OAuthAddApp = (): ReactElement => {
 		control,
 	} = useForm<OAuthAddAppPayload>();
 
-	const saveApp = useMethod('addOAuthApp');
+	const saveApp = useEndpoint('POST', '/v1/oauth-apps.create');
 
 	const router = useRoute('admin-oauth-apps');
 
@@ -34,52 +49,52 @@ const OAuthAddApp = (): ReactElement => {
 			close();
 			dispatchToastMessage({ type: 'success', message: t('Application_added') });
 		} catch (error) {
-			dispatchToastMessage({ type: 'error', message: String(error) });
+			dispatchToastMessage({ type: 'error', message: error });
 		}
 	};
 
 	return (
-		<VerticalBar.ScrollableContent w='full'>
+		<ContextualbarScrollableContent w='full'>
 			<FieldGroup maxWidth='x600' alignSelf='center' w='full'>
 				<Field>
-					<Field.Label display='flex' justifyContent='space-between' w='full'>
-						{t('Active')}
+					<FieldRow>
+						<FieldLabel>{t('Active')}</FieldLabel>
 						<Controller
 							name='active'
 							control={control}
 							defaultValue={false}
 							render={({ field }): ReactElement => <ToggleSwitch onChange={field.onChange} checked={field.value} />}
 						/>
-					</Field.Label>
+					</FieldRow>
 				</Field>
 				<Field>
-					<Field.Label>{t('Application_Name')}</Field.Label>
-					<Field.Row>
-						<TextInput {...register('name', { required: true })} />
-					</Field.Row>
-					<Field.Hint>{t('Give_the_application_a_name_This_will_be_seen_by_your_users')}</Field.Hint>
-					{errors?.name && <Field.Error>{t('error-the-field-is-required', { field: t('Name') })}</Field.Error>}
+					<FieldLabel>{t('Application_Name')}</FieldLabel>
+					<FieldRow>
+						<TextInput {...register('name', { required: t('Required_field', { field: t('Name') }) })} />
+					</FieldRow>
+					<FieldHint>{t('Give_the_application_a_name_This_will_be_seen_by_your_users')}</FieldHint>
+					{errors?.name && <FieldError>{errors.name.message}</FieldError>}
 				</Field>
 				<Field>
-					<Field.Label>{t('Redirect_URI')}</Field.Label>
-					<Field.Row>
+					<FieldLabel>{t('Redirect_URI')}</FieldLabel>
+					<FieldRow>
 						<TextAreaInput rows={5} {...register('redirectUri', { required: true })} />
-					</Field.Row>
-					<Field.Hint>{t('After_OAuth2_authentication_users_will_be_redirected_to_this_URL')}</Field.Hint>
-					{errors?.redirectUri && <Field.Error>{t('error-the-field-is-required', { field: t('Redirect_URI') })}</Field.Error>}
+					</FieldRow>
+					<FieldHint>{t('After_OAuth2_authentication_users_will_be_redirected_to_this_URL')}</FieldHint>
+					{errors?.redirectUri && <FieldError>{t('Required_field', { field: t('Redirect_URI') })}</FieldError>}
 				</Field>
 				<Field>
-					<Field.Row>
-						<ButtonGroup stretch w='full'>
+					<FieldRow>
+						<ButtonGroup stretch>
 							<Button onClick={close}>{t('Cancel')}</Button>
 							<Button primary onClick={handleSubmit(onSubmit)}>
 								{t('Save')}
 							</Button>
 						</ButtonGroup>
-					</Field.Row>
+					</FieldRow>
 				</Field>
 			</FieldGroup>
-		</VerticalBar.ScrollableContent>
+		</ContextualbarScrollableContent>
 	);
 };
 

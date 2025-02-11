@@ -1,38 +1,17 @@
-import { Db, Collection } from 'mongodb';
+import type { IAuthorization, RoomAccessValidator } from '@rocket.chat/core-services';
+import { License, ServiceClass } from '@rocket.chat/core-services';
+import type { IUser, IRole, IRoom, ISubscription, IRocketChatRecord } from '@rocket.chat/core-typings';
+import { Subscriptions, Rooms, Users, Roles, Permissions } from '@rocket.chat/models';
 import mem from 'mem';
-import type { IUser, IRole, IRoom, ISubscription } from '@rocket.chat/core-typings';
 
-import { IAuthorization, RoomAccessValidator } from '../../sdk/types/IAuthorization';
-import { ServiceClass } from '../../sdk/types/ServiceClass';
-import { AuthorizationUtils } from '../../../app/authorization/lib/AuthorizationUtils';
 import { canAccessRoom } from './canAccessRoom';
-import { SubscriptionsRaw } from '../../../app/models/server/raw/Subscriptions';
-import { SettingsRaw } from '../../../app/models/server/raw/Settings';
-import { RoomsRaw } from '../../../app/models/server/raw/Rooms';
-import { TeamMemberRaw } from '../../../app/models/server/raw/TeamMember';
-import { TeamRaw } from '../../../app/models/server/raw/Team';
-import { RolesRaw } from '../../../app/models/server/raw/Roles';
-import { UsersRaw } from '../../../app/models/server/raw/Users';
-import { License } from '../../sdk';
+import { AuthorizationUtils } from '../../../app/authorization/lib/AuthorizationUtils';
 
 import './canAccessRoomLivechat';
-import './canAccessRoomTokenpass';
-
-export let Subscriptions: SubscriptionsRaw;
-export let Settings: SettingsRaw;
-export let Rooms: RoomsRaw;
-export let TeamMembers: TeamMemberRaw;
-export let Team: TeamRaw;
 
 // Register as class
 export class Authorization extends ServiceClass implements IAuthorization {
 	protected name = 'authorization';
-
-	private Permissions: Collection;
-
-	private Users: UsersRaw;
-
-	private Roles: RolesRaw;
 
 	private getRolesCached = mem(this.getRoles.bind(this), {
 		maxAge: 1000,
@@ -44,26 +23,8 @@ export class Authorization extends ServiceClass implements IAuthorization {
 		...(process.env.TEST_MODE === 'true' && { maxAge: 1 }),
 	});
 
-	constructor(db: Db) {
+	constructor() {
 		super();
-
-		this.Permissions = db.collection('rocketchat_permissions');
-
-		this.Users = new UsersRaw(db.collection('users'));
-
-		Subscriptions = new SubscriptionsRaw(db.collection('rocketchat_subscription'), {
-			Users: this.Users,
-		});
-
-		this.Roles = new RolesRaw(db.collection('rocketchat_roles'), {
-			Users: this.Users,
-			Subscriptions,
-		});
-
-		Settings = new SettingsRaw(db.collection('rocketchat_settings'));
-		Rooms = new RoomsRaw(db.collection('rocketchat_room'));
-		TeamMembers = new TeamMemberRaw(db.collection('rocketchat_team_member'));
-		Team = new TeamRaw(db.collection('rocketchat_team'));
 
 		const clearCache = (): void => {
 			mem.clear(this.getRolesCached);
@@ -78,16 +39,20 @@ export class Authorization extends ServiceClass implements IAuthorization {
 	}
 
 	async started(): Promise<void> {
-		if (!(await License.isEnterprise())) {
-			return;
-		}
+		try {
+			if (!(await License.hasValidLicense())) {
+				return;
+			}
 
-		const permissions = await License.getGuestPermissions();
-		if (!permissions) {
-			return;
-		}
+			const permissions = await License.getGuestPermissions();
+			if (!permissions) {
+				return;
+			}
 
-		AuthorizationUtils.addRolePermissionWhiteList('guest', permissions);
+			AuthorizationUtils.addRolePermissionWhiteList('guest', permissions);
+		} catch (error) {
+			console.error('Authorization Service did not start correctly', error);
+		}
 	}
 
 	async hasAllPermission(userId: string, permissions: string[], scope?: string): Promise<boolean> {
@@ -116,13 +81,12 @@ export class Authorization extends ServiceClass implements IAuthorization {
 	}
 
 	async canAccessRoomId(rid: IRoom['_id'], uid: IUser['_id']): Promise<boolean> {
-		const room = await Rooms.findOneById<Pick<IRoom, '_id' | 't' | 'teamId' | 'prid' | 'tokenpass'>>(rid, {
+		const room = await Rooms.findOneById<Pick<IRoom, '_id' | 't' | 'teamId' | 'prid'>>(rid, {
 			projection: {
 				_id: 1,
 				t: 1,
 				teamId: 1,
 				prid: 1,
-				tokenpass: 1,
 			},
 		});
 
@@ -137,7 +101,7 @@ export class Authorization extends ServiceClass implements IAuthorization {
 		AuthorizationUtils.addRolePermissionWhiteList(role, permissions);
 	}
 
-	async getUsersFromPublicRoles(): Promise<Pick<IUser, '_id' | 'username' | 'roles'>[]> {
+	async getUsersFromPublicRoles(): Promise<(IRocketChatRecord & Pick<IUser, '_id' | 'username' | 'roles'>)[]> {
 		const roleIds = await this.getPublicRoles();
 
 		return this.getUserFromRoles(roleIds);
@@ -145,7 +109,7 @@ export class Authorization extends ServiceClass implements IAuthorization {
 
 	private getPublicRoles = mem(
 		async (): Promise<string[]> => {
-			const roles = await this.Roles.find<Pick<IRole, '_id'>>(
+			const roles = await Roles.find<Pick<IRole, '_id'>>(
 				{ scope: 'Users', description: { $exists: true, $ne: '' } },
 				{ projection: { _id: 1 } },
 			).toArray();
@@ -167,7 +131,7 @@ export class Authorization extends ServiceClass implements IAuthorization {
 				},
 			};
 
-			const users = await this.Users.findUsersInRoles(roleIds, null, options).toArray();
+			const users = await Users.findUsersInRoles(roleIds, null, options).toArray();
 
 			return users.map((user) => ({
 				...user,
@@ -182,12 +146,12 @@ export class Authorization extends ServiceClass implements IAuthorization {
 			return false;
 		}
 
-		const result = await this.Permissions.findOne({ _id: permission, roles: { $in: roles } }, { projection: { _id: 1 } });
+		const result = await Permissions.findOne({ _id: permission, roles: { $in: roles } }, { projection: { _id: 1 } });
 		return !!result;
 	}
 
 	private async getRoles(uid: string, scope?: IRoom['_id']): Promise<string[]> {
-		const { roles: userRoles = [] } = (await this.Users.findOneById(uid, { projection: { roles: 1 } })) || {};
+		const { roles: userRoles = [] } = (await Users.findOneById(uid, { projection: { roles: 1 } })) || {};
 		const { roles: subscriptionsRoles = [] } =
 			(scope &&
 				(await Subscriptions.findOne<Pick<ISubscription, 'roles'>>({ 'rid': scope, 'u._id': uid }, { projection: { roles: 1 } }))) ||

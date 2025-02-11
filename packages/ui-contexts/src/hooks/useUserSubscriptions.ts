@@ -1,11 +1,11 @@
-import { useContext, useMemo } from 'react';
-import { useSubscription } from 'use-subscription';
+import { useContext, useMemo, useSyncExternalStore } from 'react';
 
-import type { ISubscription } from '../../../core-typings/dist';
-import { FindOptions, SubscriptionQuery, UserContext } from '../UserContext';
+import type { FindOptions, SubscriptionQuery } from '../UserContext';
+import { UserContext } from '../UserContext';
+import type { SubscriptionWithRoom } from '../types/SubscriptionWithRoom';
 
-export const useUserSubscriptions = (query: SubscriptionQuery, options?: FindOptions): Array<ISubscription> | [] => {
+export const useUserSubscriptions = (query: SubscriptionQuery, options?: FindOptions): SubscriptionWithRoom[] => {
 	const { querySubscriptions } = useContext(UserContext);
-	const subscription = useMemo(() => querySubscriptions(query, options), [querySubscriptions, query, options]);
-	return useSubscription(subscription);
+	const [subscribe, getSnapshot] = useMemo(() => querySubscriptions(query, options), [querySubscriptions, query, options]);
+	return useSyncExternalStore(subscribe, getSnapshot);
 };

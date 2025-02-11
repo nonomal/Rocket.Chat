@@ -1,5 +1,5 @@
 import { Skeleton } from '@rocket.chat/fuselage';
-import React, { ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
 const PreviewSkeleton = (): ReactElement => <Skeleton variant='rect' w='full' h='x200' />;
 

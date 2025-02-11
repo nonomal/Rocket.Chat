@@ -1,6 +1,6 @@
 import type { ILivechatBusinessHour } from '@rocket.chat/core-typings';
 
-import { IBusinessHourBehavior } from './IBusinessHourBehavior';
+import type { IBusinessHourBehavior } from './IBusinessHourBehavior';
 import { SingleBusinessHourBehavior } from './Single';
 
 class BusinessHoursManager {
@@ -28,10 +28,6 @@ class BusinessHoursManager {
 
 	showBackButton(): boolean {
 		return this.behavior.showBackButton();
-	}
-
-	showTimezoneTemplate(): boolean {
-		return this.behavior.showTimezoneTemplate();
 	}
 }
 

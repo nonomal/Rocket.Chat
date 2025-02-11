@@ -1,86 +1,178 @@
 import type { IRoom } from '@rocket.chat/core-typings';
-import { useUserSubscription } from '@rocket.chat/ui-contexts';
-import React, { ReactNode, useContext, useMemo, memo, useEffect, useCallback } from 'react';
+import type { ReactNode, ContextType, ReactElement } from 'react';
+import { useMemo, memo, useEffect, useCallback } from 'react';
 
-import { UserAction } from '../../../../app/ui';
-import { RoomManager, useHandleRoom } from '../../../lib/RoomManager';
-import { AsyncStatePhase } from '../../../lib/asyncState';
+import ComposerPopupProvider from './ComposerPopupProvider';
+import RoomToolboxProvider from './RoomToolboxProvider';
+import UserCardProvider from './UserCardProvider';
+import { useRedirectOnSettingsChanged } from './hooks/useRedirectOnSettingsChanged';
+import { useRoomQuery } from './hooks/useRoomQuery';
+import { useUsersNameChanged } from './hooks/useUsersNameChanged';
+import { Subscriptions } from '../../../../app/models/client';
+import { UserAction } from '../../../../app/ui/client/lib/UserAction';
+import { RoomHistoryManager } from '../../../../app/ui-utils/client';
+import { useReactiveQuery } from '../../../hooks/useReactiveQuery';
+import { useReactiveValue } from '../../../hooks/useReactiveValue';
+import { useRoomInfoEndpoint } from '../../../hooks/useRoomInfoEndpoint';
+import { useSidePanelNavigation } from '../../../hooks/useSidePanelNavigation';
+import { RoomManager } from '../../../lib/RoomManager';
+import { subscriptionsQueryKeys } from '../../../lib/queryKeys';
 import { roomCoordinator } from '../../../lib/rooms/roomCoordinator';
-import RoomSkeleton from '../Room/RoomSkeleton';
-import { RoomContext, RoomContextValue } from '../contexts/RoomContext';
-import ToolboxProvider from './ToolboxProvider';
+import ImageGalleryProvider from '../../../providers/ImageGalleryProvider';
+import RoomNotFound from '../RoomNotFound';
+import RoomSkeleton from '../RoomSkeleton';
+import { useRoomRolesManagement } from '../body/hooks/useRoomRolesManagement';
+import type { IRoomWithFederationOriginalName } from '../contexts/RoomContext';
+import { RoomContext } from '../contexts/RoomContext';
 
-export type Props = {
+type RoomProviderProps = {
 	children: ReactNode;
 	rid: IRoom['_id'];
 };
 
-const fields = {};
+const RoomProvider = ({ rid, children }: RoomProviderProps): ReactElement => {
+	useRoomRolesManagement(rid);
 
-const RoomProvider = ({ rid, children }: Props): JSX.Element => {
-	const { phase, value: room } = useHandleRoom(rid);
+	const resultFromServer = useRoomInfoEndpoint(rid);
 
-	const getMore = useCallback(() => {
-		RoomManager.getMore(rid);
-	}, [rid]);
+	const resultFromLocal = useRoomQuery(rid);
 
-	const subscribed = Boolean(useUserSubscription(rid, fields));
-	const context = useMemo(() => {
+	const subscriptionQuery = useReactiveQuery(subscriptionsQueryKeys.subscription(rid), () => Subscriptions.findOne({ rid }) ?? null);
+
+	useRedirectOnSettingsChanged(subscriptionQuery.data);
+
+	useUsersNameChanged();
+
+	const pseudoRoom: IRoomWithFederationOriginalName | null = useMemo(() => {
+		const room = resultFromLocal.data;
 		if (!room) {
 			return null;
 		}
-		room._id = rid;
+
 		return {
-			subscribed,
-			rid,
-			getMore,
-			room: { ...room, name: roomCoordinator.getRoomName(room.t, room) },
+			...subscriptionQuery.data,
+			...room,
+			name: roomCoordinator.getRoomName(room.t, room),
+			federationOriginalName: room.name,
 		};
-	}, [room, rid, subscribed, getMore]);
+	}, [resultFromLocal.data, subscriptionQuery.data]);
+
+	const { hasMorePreviousMessages, hasMoreNextMessages, isLoadingMoreMessages } = useReactiveValue(
+		useCallback(() => {
+			const { hasMore, hasMoreNext, isLoading } = RoomHistoryManager.getRoom(rid);
+
+			return {
+				hasMorePreviousMessages: hasMore.get(),
+				hasMoreNextMessages: hasMoreNext.get(),
+				isLoadingMoreMessages: isLoading.get(),
+			};
+		}, [rid]),
+	);
+
+	const context = useMemo((): ContextType<typeof RoomContext> => {
+		if (!pseudoRoom) {
+			return null;
+		}
+
+		return {
+			rid,
+			room: pseudoRoom,
+			subscription: subscriptionQuery.data ?? undefined,
+			hasMorePreviousMessages,
+			hasMoreNextMessages,
+			isLoadingMoreMessages,
+		};
+	}, [hasMoreNextMessages, hasMorePreviousMessages, isLoadingMoreMessages, pseudoRoom, rid, subscriptionQuery.data]);
+
+	const isSidepanelFeatureEnabled = useSidePanelNavigation();
 
 	useEffect(() => {
+		if (isSidepanelFeatureEnabled) {
+			if (resultFromServer.isSuccess) {
+				if (resultFromServer.data.room?.teamMain) {
+					if (
+						resultFromServer.data.room.sidepanel?.items.includes('channels') ||
+						resultFromServer.data.room?.sidepanel?.items.includes('discussions')
+					) {
+						RoomManager.openSecondLevel(rid, rid);
+					} else {
+						RoomManager.open(rid);
+					}
+					return (): void => {
+						RoomManager.back(rid);
+					};
+				}
+
+				switch (true) {
+					case resultFromServer.data.room?.prid &&
+						resultFromServer.data.parent &&
+						resultFromServer.data.parent.sidepanel?.items.includes('discussions'):
+						RoomManager.openSecondLevel(resultFromServer.data.parent._id, rid);
+						break;
+					case resultFromServer.data.team?.roomId &&
+						!resultFromServer.data.room?.teamMain &&
+						resultFromServer.data.parent?.sidepanel?.items.includes('channels'):
+						RoomManager.openSecondLevel(resultFromServer.data.team.roomId, rid);
+						break;
+
+					default:
+						if (
+							resultFromServer.data.parent?.sidepanel?.items.includes('channels') ||
+							resultFromServer.data.parent?.sidepanel?.items.includes('discussions')
+						) {
+							RoomManager.openSecondLevel(rid, rid);
+						} else {
+							RoomManager.open(rid);
+						}
+						break;
+				}
+			}
+			return (): void => {
+				RoomManager.back(rid);
+			};
+		}
+
 		RoomManager.open(rid);
 		return (): void => {
 			RoomManager.back(rid);
 		};
-	}, [rid]);
+	}, [
+		isSidepanelFeatureEnabled,
+		rid,
+		resultFromServer.data?.room?.prid,
+		resultFromServer.data?.room?.teamId,
+		resultFromServer.data?.room?.teamMain,
+		resultFromServer.isSuccess,
+		resultFromServer.data?.parent,
+		resultFromServer.data?.team?.roomId,
+		resultFromServer.data,
+	]);
+
+	const subscribed = !!subscriptionQuery.data;
 
 	useEffect(() => {
 		if (!subscribed) {
-			return (): void => undefined;
+			return;
 		}
 
-		UserAction.addStream(rid);
-		return (): void => {
-			UserAction.cancel(rid);
-		};
+		return UserAction.addStream(rid);
 	}, [rid, subscribed]);
 
-	if (phase === AsyncStatePhase.LOADING || !room) {
-		return <RoomSkeleton />;
+	if (!pseudoRoom) {
+		return resultFromLocal.isSuccess && !resultFromLocal.data ? <RoomNotFound /> : <RoomSkeleton />;
 	}
 
 	return (
 		<RoomContext.Provider value={context}>
-			<ToolboxProvider room={room}>{children}</ToolboxProvider>
+			<RoomToolboxProvider>
+				<ImageGalleryProvider>
+					<UserCardProvider>
+						<ComposerPopupProvider room={pseudoRoom}>{children}</ComposerPopupProvider>
+					</UserCardProvider>
+				</ImageGalleryProvider>
+			</RoomToolboxProvider>
 		</RoomContext.Provider>
 	);
-};
-
-export const useRoom = (): IRoom => {
-	const context = useContext(RoomContext);
-	if (!context) {
-		throw Error('useRoom should be used only inside rooms context');
-	}
-	return context.room;
-};
-
-export const useRoomContext = (): RoomContextValue => {
-	const context = useContext(RoomContext);
-	if (!context) {
-		throw Error('useRoom should be used only inside rooms context');
-	}
-	return context;
 };
 
 export default memo(RoomProvider);

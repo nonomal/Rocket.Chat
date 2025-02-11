@@ -1,26 +1,25 @@
-import { Table, Icon, Button } from '@rocket.chat/fuselage';
-import { useMutableCallback } from '@rocket.chat/fuselage-hooks';
-import { useSetModal, useToastMessageDispatch, useMethod, useTranslation } from '@rocket.chat/ui-contexts';
-import React, { FC } from 'react';
+import { IconButton } from '@rocket.chat/fuselage';
+import { useEffectEvent } from '@rocket.chat/fuselage-hooks';
+import { useSetModal, useToastMessageDispatch } from '@rocket.chat/ui-contexts';
+import type { MouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { useRemoveCurrentChatMutation } from './hooks/useRemoveCurrentChatMutation';
 import GenericModal from '../../../components/GenericModal';
 
-const RemoveChatButton: FC<{ _id: string; reload: () => void }> = ({ _id, reload }) => {
-	const removeChat = useMethod('livechat:removeRoom');
+type RemoveChatButtonProps = { _id: string };
+
+const RemoveChatButton = ({ _id }: RemoveChatButtonProps) => {
+	const removeCurrentChatMutation = useRemoveCurrentChatMutation();
 	const setModal = useSetModal();
 	const dispatchToastMessage = useToastMessageDispatch();
-	const t = useTranslation();
+	const { t } = useTranslation();
 
-	const handleRemoveClick = useMutableCallback(async () => {
-		try {
-			await removeChat(_id);
-		} catch (error) {
-			console.log(error);
-		}
-		reload();
+	const handleRemoveClick = useEffectEvent(async () => {
+		removeCurrentChatMutation.mutate(_id);
 	});
 
-	const handleDelete = useMutableCallback((e) => {
+	const handleDelete = useEffectEvent((e: MouseEvent) => {
 		e.stopPropagation();
 		const onDeleteAgent = async (): Promise<void> => {
 			try {
@@ -32,22 +31,18 @@ const RemoveChatButton: FC<{ _id: string; reload: () => void }> = ({ _id, reload
 			setModal(null);
 		};
 
-		const handleClose = (): void => {
-			setModal(null);
-		};
-
 		setModal(
-			<GenericModal variant='danger' onConfirm={onDeleteAgent} onClose={handleClose} onCancel={handleClose} confirmText={t('Delete')} />,
+			<GenericModal
+				variant='danger'
+				data-qa-id='current-chats-modal-remove'
+				onConfirm={onDeleteAgent}
+				onCancel={() => setModal(null)}
+				confirmText={t('Delete')}
+			/>,
 		);
 	});
 
-	return (
-		<Table.Cell fontScale='p2' color='hint' withTruncatedText>
-			<Button small ghost title={t('Remove')} onClick={handleDelete}>
-				<Icon name='trash' size='x16' />
-			</Button>
-		</Table.Cell>
-	);
+	return <IconButton danger small icon='trash' title={t('Remove')} disabled={removeCurrentChatMutation.isPending} onClick={handleDelete} />;
 };
 
 export default RemoveChatButton;

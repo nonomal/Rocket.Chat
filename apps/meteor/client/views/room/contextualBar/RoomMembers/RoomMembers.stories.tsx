@@ -1,9 +1,9 @@
+import { UserStatus } from '@rocket.chat/core-typings';
 import { action } from '@storybook/addon-actions';
-import { ComponentMeta, ComponentStory } from '@storybook/react';
-import React from 'react';
+import type { Meta, StoryFn } from '@storybook/react';
 
-import VerticalBar from '../../../../components/VerticalBar';
-import RoomMembers from './List/RoomMembers';
+import RoomMembers from './RoomMembers';
+import { Contextualbar } from '../../../../components/Contextualbar';
 
 export default {
 	title: 'Room/Contextual Bar/RoomMembers',
@@ -12,10 +12,10 @@ export default {
 		layout: 'fullscreen',
 		actions: { argTypesRegex: '^on.*' },
 	},
-	decorators: [(fn) => <VerticalBar height='100vh'>{fn()}</VerticalBar>],
-} as ComponentMeta<typeof RoomMembers>;
+	decorators: [(fn) => <Contextualbar height='100vh'>{fn()}</Contextualbar>],
+} satisfies Meta<typeof RoomMembers>;
 
-const Template: ComponentStory<typeof RoomMembers> = (args) => <RoomMembers {...args} />;
+const Template: StoryFn<typeof RoomMembers> = (args) => <RoomMembers {...args} />;
 
 export const Default = Template.bind({});
 Default.args = {
@@ -24,16 +24,15 @@ Default.args = {
 		{
 			_id: 'rocket.cat',
 			username: 'rocket.cat',
-			status: 'online',
+			status: UserStatus.ONLINE,
 			name: 'Rocket.Cat',
 		},
 	],
 	text: 'filter',
 	type: 'online',
-	setText: action('setText'),
-	setType: action('setType'),
+	setText: action('Lorem Ipsum'),
+	setType: action('online'),
 	total: 123,
-	error: { message: 'Error message' },
 	loadMoreItems: action('loadMoreItems'),
 	rid: '!roomId',
 	isTeam: false,

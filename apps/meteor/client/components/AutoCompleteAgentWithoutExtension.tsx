@@ -1,7 +1,7 @@
-import { ILivechatAgent } from '@rocket.chat/core-typings';
+import type { ILivechatAgent } from '@rocket.chat/core-typings';
 import { PaginatedSelectFiltered } from '@rocket.chat/fuselage';
 import { useDebouncedValue } from '@rocket.chat/fuselage-hooks';
-import React, { FC, memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import { useRecordList } from '../hooks/lists/useRecordList';
 import { AsyncStatePhase } from '../lib/asyncState';
@@ -14,7 +14,7 @@ type AutoCompleteAgentProps = {
 	currentExtension?: string;
 };
 
-const AutoCompleteAgentWithoutExtension: FC<AutoCompleteAgentProps> = (props) => {
+const AutoCompleteAgentWithoutExtension = (props: AutoCompleteAgentProps) => {
 	const { value, currentExtension, onChange = (): void => undefined, haveAll = false } = props;
 	const [agentsFilter, setAgentsFilter] = useState<string | number | undefined>('');
 

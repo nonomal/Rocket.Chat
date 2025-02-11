@@ -1,35 +1,44 @@
-import { IRoom } from '@rocket.chat/core-typings';
+import { isRoomFederated } from '@rocket.chat/core-typings';
+import type { IRoom, RoomAdminFieldsType } from '@rocket.chat/core-typings';
 import { css } from '@rocket.chat/css-in-js';
-import { Box, Button, ButtonGroup, Icon } from '@rocket.chat/fuselage';
-import { useMutableCallback } from '@rocket.chat/fuselage-hooks';
-import { useTranslation } from '@rocket.chat/ui-contexts';
-import React, { useEffect, ReactElement } from 'react';
+import { Box, Button, ButtonGroup } from '@rocket.chat/fuselage';
+import { useEffectEvent } from '@rocket.chat/fuselage-hooks';
+import { RoomAvatar } from '@rocket.chat/ui-avatar';
+import { useToastMessageDispatch } from '@rocket.chat/ui-contexts';
+import type { ReactElement } from 'react';
+import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { getAvatarURL } from '../../../app/utils/lib/getAvatarURL';
-import { useFileInput } from '../../hooks/useFileInput';
-import RoomAvatar from './RoomAvatar';
+import { getAvatarURL } from '../../../app/utils/client/getAvatarURL';
+import { useSingleFileInput } from '../../hooks/useSingleFileInput';
+import { isValidImageFormat } from '../../lib/utils/isValidImageFormat';
 
 type RoomAvatarEditorProps = {
-	room: IRoom;
+	room: Pick<IRoom, RoomAdminFieldsType>;
+	disabled?: boolean;
 	roomAvatar?: string;
 	onChangeAvatar: (url: string | null) => void;
 };
 
-const RoomAvatarEditor = ({ room, roomAvatar, onChangeAvatar }: RoomAvatarEditorProps): ReactElement => {
-	const t = useTranslation();
+const RoomAvatarEditor = ({ disabled = false, room, roomAvatar, onChangeAvatar }: RoomAvatarEditorProps): ReactElement => {
+	const { t } = useTranslation();
+	const dispatchToastMessage = useToastMessageDispatch();
 
-	const handleChangeAvatar = useMutableCallback((file) => {
+	const handleChangeAvatar = useEffectEvent(async (file: File) => {
 		const reader = new FileReader();
 		reader.readAsDataURL(file);
-		reader.onloadend = (): void => {
-			if (typeof reader.result === 'string') {
-				onChangeAvatar(reader.result);
+		reader.onloadend = async (): Promise<void> => {
+			const { result } = reader;
+			if (typeof result === 'string' && (await isValidImageFormat(result))) {
+				onChangeAvatar(result);
+				return;
 			}
+			dispatchToastMessage({ type: 'error', message: t('Avatar_format_invalid') });
 		};
 	});
 
-	const [clickUpload, reset] = useFileInput(handleChangeAvatar);
-	const clickReset = useMutableCallback(() => {
+	const [clickUpload, reset] = useSingleFileInput(handleChangeAvatar);
+	const clickReset = useEffectEvent(() => {
 		reset();
 		onChangeAvatar(null);
 	});
@@ -51,17 +60,21 @@ const RoomAvatarEditor = ({ room, roomAvatar, onChangeAvatar }: RoomAvatarEditor
 					`,
 				]}
 				position='absolute'
-				m='x12'
+				m={12}
 			>
 				<ButtonGroup>
-					<Button small title={t('Upload_user_avatar')} onClick={clickUpload}>
-						<Icon name='upload' size='x16' />
+					<Button icon='upload' disabled={isRoomFederated(room) || disabled} small title={t('Upload_user_avatar')} onClick={clickUpload}>
 						{t('Upload')}
 					</Button>
 
-					<Button primary small danger title={t('Accounts_SetDefaultAvatar')} disabled={roomAvatar === null} onClick={clickReset}>
-						<Icon name='trash' size='x16' />
-					</Button>
+					<Button
+						small
+						danger
+						icon='trash'
+						title={t('Accounts_SetDefaultAvatar')}
+						disabled={!roomAvatar || isRoomFederated(room) || disabled}
+						onClick={clickReset}
+					/>
 				</ButtonGroup>
 			</Box>
 		</Box>

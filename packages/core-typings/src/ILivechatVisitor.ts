@@ -1,4 +1,5 @@
 import type { IRocketChatRecord } from './IRocketChatRecord';
+import type { UserStatus } from './UserStatus';
 
 export interface IVisitorPhone {
 	phoneNumber: string;
@@ -6,7 +7,7 @@ export interface IVisitorPhone {
 
 export interface IVisitorLastChat {
 	_id: string;
-	ts: string;
+	ts: Date;
 }
 
 export interface ILivechatVisitorConnectionData {
@@ -18,6 +19,10 @@ export interface ILivechatVisitorConnectionData {
 
 export interface IVisitorEmail {
 	address: string;
+}
+
+interface ILivechatData {
+	[k: string]: unknown;
 }
 
 export interface ILivechatVisitor extends IRocketChatRecord {
@@ -32,6 +37,18 @@ export interface ILivechatVisitor extends IRocketChatRecord {
 	ip?: string;
 	host?: string;
 	visitorEmails?: IVisitorEmail[];
+	status?: UserStatus;
+	lastAgent?: {
+		username: string;
+		agentId: string;
+		ts: Date;
+	};
+	livechatData?: ILivechatData;
+	contactManager?: {
+		username: string;
+	};
+	activity?: string[];
+	disabled?: boolean;
 }
 
 export interface ILivechatVisitorDTO {
@@ -40,7 +57,7 @@ export interface ILivechatVisitorDTO {
 	name?: string;
 	email?: string;
 	department?: string;
-	phone?: string | { number: string };
+	phone?: string;
 	username?: string;
 	customFields?: {
 		key: string;
@@ -48,7 +65,7 @@ export interface ILivechatVisitorDTO {
 		overwrite: boolean;
 	}[];
 	connectionData?: {
-		httpHeaders: Record<string, string>;
+		httpHeaders: Record<string, string | string[] | undefined>;
 	};
 }
 

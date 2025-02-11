@@ -1,55 +1,62 @@
-/* eslint-disable new-cap */
-import { UiKitBannerProps, UiKitBannerPayload } from '@rocket.chat/core-typings';
 import { Banner, Icon } from '@rocket.chat/fuselage';
-import {
-	kitContext,
-	// @ts-ignore
-	bannerParser,
-	UiKitBanner as renderUiKitBannerBlocks,
-} from '@rocket.chat/fuselage-ui-kit';
-import React, { Context, FC, useMemo, ReactNode, ComponentProps } from 'react';
+import { useEffectEvent } from '@rocket.chat/fuselage-hooks';
+import { UiKitContext, bannerParser, UiKitBanner as UiKitBannerSurfaceRender, UiKitComponent } from '@rocket.chat/fuselage-ui-kit';
+import { useToastMessageDispatch } from '@rocket.chat/ui-contexts';
+import type * as UiKit from '@rocket.chat/ui-kit';
+import type { ReactElement } from 'react';
+import { useMemo } from 'react';
 
-import { useUIKitHandleAction } from '../../UIKit/hooks/useUIKitHandleAction';
-import { useUIKitHandleClose } from '../../UIKit/hooks/useUIKitHandleClose';
-import { useUIKitStateManager } from '../../UIKit/hooks/useUIKitStateManager';
 import MarkdownText from '../../components/MarkdownText';
-import * as banners from '../../lib/banners';
+import { useBannerContextValue } from '../../uikit/hooks/useBannerContextValue';
+import { useUiKitActionManager } from '../../uikit/hooks/useUiKitActionManager';
+import { useUiKitView } from '../../uikit/hooks/useUiKitView';
 
 // TODO: move this to fuselage-ui-kit itself
-const mrkdwn = ({ text }: { text: string } = { text: '' }): ReactNode => <MarkdownText variant='inline' content={text} />;
+bannerParser.mrkdwn = ({ text }): ReactElement => <MarkdownText variant='inline' content={text} />;
 
-bannerParser.mrkdwn = mrkdwn;
+type UiKitBannerProps = {
+	key: UiKit.BannerView['viewId']; // force re-mount when viewId changes
+	initialView: UiKit.BannerView;
+};
 
-const UiKitBanner: FC<UiKitBannerProps> = ({ payload }) => {
-	const state = useUIKitStateManager<UiKitBannerPayload>(payload);
+const UiKitBanner = ({ initialView }: UiKitBannerProps) => {
+	const { view, values, state } = useUiKitView(initialView);
+	const actionManager = useUiKitActionManager();
+	const contextValue = useBannerContextValue({ view, values });
 
 	const icon = useMemo(() => {
-		if (state.icon) {
-			return <Icon name={state.icon as ComponentProps<typeof Icon>['name']} size={20} />;
+		if (view.icon) {
+			return <Icon name={view.icon} size='x20' />;
 		}
 
 		return null;
-	}, [state.icon]);
+	}, [view.icon]);
 
-	const handleClose = useUIKitHandleClose(state, () => banners.close());
-
-	const action = useUIKitHandleAction(state);
-
-	const contextValue = useMemo<typeof kitContext extends Context<infer V> ? V : never>(
-		() => ({
-			action: async (...args): Promise<void> => {
-				await action(...args);
-				banners.closeById(state.viewId);
-			},
-			state: (): void => undefined,
-			appId: state.appId,
-		}),
-		[action, state.appId, state.viewId],
-	);
+	const dispatchToastMessage = useToastMessageDispatch();
+	const handleClose = useEffectEvent(() => {
+		void actionManager
+			.emitInteraction(view.appId, {
+				type: 'viewClosed',
+				payload: {
+					viewId: view.viewId,
+					view: {
+						...view,
+						id: view.viewId,
+						state,
+					},
+					isCleared: true,
+				},
+			})
+			.catch((error) => {
+				dispatchToastMessage({ type: 'error', message: error });
+			});
+	});
 
 	return (
-		<Banner closeable icon={icon} inline={state.inline} title={state.title} variant={state.variant} onClose={handleClose}>
-			<kitContext.Provider value={contextValue}>{renderUiKitBannerBlocks(state.blocks, { engine: 'rocket.chat' })}</kitContext.Provider>
+		<Banner icon={icon} inline={view.inline} title={view.title} variant={view.variant} closeable onClose={handleClose}>
+			<UiKitContext.Provider value={contextValue}>
+				<UiKitComponent render={UiKitBannerSurfaceRender} blocks={view.blocks} />
+			</UiKitContext.Provider>
 		</Banner>
 	);
 };

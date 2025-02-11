@@ -1,24 +1,19 @@
 import { Box } from '@rocket.chat/fuselage';
-import React, { memo, FC } from 'react';
-import { useSubscription } from 'use-subscription';
+import { memo, useSyncExternalStore } from 'react';
 
-import Sidebar from '../../../components/Sidebar';
-import { useUpgradeTabParams } from '../../hooks/useUpgradeTabParams';
-import { itemsSubscription } from '../sidebarItems';
-import UpgradeTab from './UpgradeTab';
+import SidebarItemsAssembler from '../../../components/Sidebar/SidebarItemsAssembler';
+import { subscribeToAdminSidebarItems, getAdminSidebarItems } from '../sidebarItems';
 
 type AdminSidebarPagesProps = {
 	currentPath: string;
 };
 
-const AdminSidebarPages: FC<AdminSidebarPagesProps> = ({ currentPath }) => {
-	const items = useSubscription(itemsSubscription);
-	const { tabType, trialEndDate, isLoading } = useUpgradeTabParams();
+const AdminSidebarPages = ({ currentPath }: AdminSidebarPagesProps) => {
+	const items = useSyncExternalStore(subscribeToAdminSidebarItems, getAdminSidebarItems);
 
 	return (
-		<Box display='flex' flexDirection='column' flexShrink={0} pb='x8'>
-			{!isLoading && tabType && <UpgradeTab type={tabType} currentPath={currentPath} trialEndDate={trialEndDate} />}
-			<Sidebar.ItemsAssembler items={items} currentPath={currentPath} />
+		<Box display='flex' flexDirection='column' flexShrink={0} pb={8}>
+			<SidebarItemsAssembler items={items} currentPath={currentPath} />
 		</Box>
 	);
 };

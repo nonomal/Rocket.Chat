@@ -1,13 +1,36 @@
 import type { CpuInfo } from 'os';
 
+import type { IMatrixFederationStatistics } from './IMatrixFederationStatistics';
 import type { DeviceSessionAggregationResult, OSSessionAggregationResult, UserSessionAggregationResult } from './ISession';
-import type { ISettingStatisticsObject, SettingValue } from './ISetting';
+import type { ISettingStatisticsObject } from './ISetting';
 import type { ITeamStats } from './ITeam';
+import type { MACStats } from './omnichannel';
+
+export interface IVoIPPeriodStats {
+	calls?: number;
+	externalInboundCalls?: number;
+	externalOutboundCalls?: number;
+	internalCalls?: number;
+	externalCalls?: number;
+	successfulCalls?: number;
+	failedCalls?: number;
+	callsDuration?: number;
+}
 
 export interface IStats {
 	_id: string;
-	wizard: Record<string, unknown>;
+	wizard: {
+		organizationType?: string;
+		industry?: string;
+		size?: string;
+		country?: string;
+		language?: string;
+		serverType?: string;
+		registerServer?: boolean;
+	};
 	uniqueId: string;
+	deploymentFingerprintHash: string;
+	deploymentFingerprintVerified: boolean;
 	installedAt?: string;
 	version?: string;
 	tag?: string;
@@ -33,16 +56,25 @@ export interface IStats {
 	teams: ITeamStats;
 	totalLivechatVisitors: number;
 	totalLivechatAgents: number;
+	totalLivechatManagers: number;
+	totalCustomFields: number;
+	totalLivechatPublicCustomFields: number;
+	livechatAutomaticForwardingUnansweredChats: boolean;
 	livechatEnabled: boolean;
+	isDepartmentRemovalEnabled: boolean;
 	totalChannelMessages: number;
 	totalPrivateGroupMessages: number;
 	totalDirectMessages: number;
+	totalDiscussionsMessages: number;
 	totalLivechatMessages: number;
+	totalLivechatRoomsWithPriority: number;
+	totalLivechatRoomsWithDepartment: number;
+	totalTriggers: number;
 	totalMessages: number;
 	federatedServers: number;
 	federatedUsers: number;
 	lastLogin: string;
-	lastMessageSentAt: string;
+	lastMessageSentAt: Date | undefined;
 	lastSeenSubscription: string;
 	os: {
 		type: string;
@@ -71,16 +103,22 @@ export interface IStats {
 		_id?: string;
 		locked: boolean;
 		version: number;
-		buildAt?: string;
-		lockedAt?: string;
+		buildAt?: string | Date;
+		lockedAt?: string | Date;
 	};
 	instanceCount: number;
 	oplogEnabled: boolean;
+	msEnabled: boolean;
 	mongoVersion: string;
 	mongoStorageEngine: string;
 	pushQueue: number;
 	omnichannelSources: { [key: string]: number | string }[];
+	omnichannelContactsBySource: MACStats;
+	uniqueContactsOfLastMonth: MACStats;
+	uniqueContactsOfLastWeek: MACStats;
+	uniqueContactsOfYesterday: MACStats;
 	departments: number;
+	archivedDepartments: number;
 	routingAlgorithm: string;
 	onHoldEnabled: boolean;
 	emailInboxes: number;
@@ -112,13 +150,13 @@ export interface IStats {
 	uniqueOSOfLastWeek: OSSessionAggregationResult;
 	uniqueOSOfLastMonth: OSSessionAggregationResult;
 	apps: {
-		engineVersion: number;
-		enabled: SettingValue;
+		engineVersion: string;
 		totalInstalled: number | false;
 		totalActive: number | false;
 		totalFailed: number | false;
 	};
 	services: Record<string, unknown>;
+	importer: Record<string, unknown>;
 	settings: ISettingStatisticsObject;
 	integrations: {
 		totalIntegrations: number;
@@ -132,10 +170,22 @@ export interface IStats {
 		modules: string[];
 		tags: string[];
 		seatRequests: number;
-		livechatTags: number;
-		cannedResponses: number;
-		priorities: number;
-		businessUnits: number;
+		livechatTags?: number;
+		cannedResponses?: number;
+		priorities?: number;
+		slas?: number;
+		businessUnits?: number;
+		omnichannelPdfTranscriptRequested?: number;
+		omnichannelPdfTranscriptSucceeded?: number;
+		omnichannelRoomsWithSlas?: number;
+		omnichannelRoomsWithPriorities?: number;
+		livechatMonitors?: number;
+		voip?: {
+			total?: IVoIPPeriodStats;
+			lastMonth?: IVoIPPeriodStats;
+			lastWeek?: IVoIPPeriodStats;
+			lastDay?: IVoIPPeriodStats;
+		};
 	};
 	createdAt: Date | string;
 	totalOTR: number;
@@ -145,4 +195,79 @@ export interface IStats {
 	messageAuditLoad: number;
 	dashboardCount: number;
 	joinJitsiButton: number;
+	totalBroadcastRooms: number;
+	totalTriggeredEmails: number;
+	totalRoomsWithStarred: number;
+	totalRoomsWithPinned: number;
+	totalUserEmail2fa: number;
+	totalUserTOTP: number;
+	totalStarred: number;
+	totalPinned: number;
+	totalLinkInvitation: number;
+	totalEmailInvitation: number;
+	totalE2ERooms: number;
+	logoChange: boolean;
+	homeTitleChanged: boolean;
+	homeBodyChanged: boolean;
+	customCSSChanged: boolean;
+	onLogoutCustomScriptChanged: boolean;
+	loggedOutCustomScriptChanged: boolean;
+	loggedInCustomScriptChanged: boolean;
+	roomsInsideTeams: number;
+	showHomeButton: boolean;
+	totalEncryptedMessages: number;
+	totalLinkInvitationUses: number;
+	totalManuallyAddedUsers: number;
+	videoConf: {
+		videoConference: {
+			started: number;
+			ended: number;
+		};
+		direct: {
+			calling: number;
+			started: number;
+			ended: number;
+		};
+		livechat: {
+			started: number;
+			ended: number;
+		};
+		settings: {
+			provider: string;
+			dms: boolean;
+			channels: boolean;
+			groups: boolean;
+			teams: boolean;
+		};
+	};
+	totalSubscriptionRoles: number;
+	totalUserRoles: number;
+	totalCustomRoles: number;
+	totalWebRTCCalls: number;
+	uncaughtExceptionsCount: number;
+	push: number;
+	pushSecured: boolean;
+	dailyPeakConnections: number;
+	maxMonthlyPeakConnections: number;
+	matrixFederation: IMatrixFederationStatistics;
+	webRTCEnabled: boolean;
+	webRTCEnabledForOmnichannel: boolean;
+	omnichannelWebRTCCalls: number;
+	statsToken?: string;
+	contactVerification: {
+		totalContacts: number;
+		totalUnknownContacts: number;
+		totalMergedContacts: number;
+		totalConflicts: number;
+		totalResolvedConflicts: number;
+		totalBlockedContacts: number;
+		totalPartiallyBlockedContacts: number;
+		totalFullyBlockedContacts: number;
+		totalVerifiedContacts: number;
+		avgChannelsPerContact: number;
+		totalContactsWithoutChannels: number;
+		totalImportedContacts: number;
+		totalUpsellViews: number;
+		totalUpsellClicks: number;
+	};
 }

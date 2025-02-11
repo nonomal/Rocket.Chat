@@ -1,8 +1,8 @@
 import { usePermission } from '@rocket.chat/ui-contexts';
-import React, { ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
-import NotAuthorizedPage from '../../notAuthorized/NotAuthorizedPage';
 import InvitesPage from './InvitesPage';
+import NotAuthorizedPage from '../../notAuthorized/NotAuthorizedPage';
 
 const InvitesRoute = (): ReactElement => {
 	const canCreateInviteLinks = usePermission('create-invite-links');
